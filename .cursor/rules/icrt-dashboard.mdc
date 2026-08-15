@@ -1,0 +1,216 @@
+---
+description: Implementation design rules for the ICRT dashboard
+alwaysApply: true
+---
+
+# ICRT dashboard: implementation rules
+
+Vue 3 + TypeScript + Vite SPA. Three products, one static JSON payload, three
+subscription tiers. Graded on code cleanliness, layout organisation and
+pragmatic engineering trade-offs.
+
+## Scope discipline
+
+This is a small application. Reject architecture that solves problems this
+codebase does not have.
+
+Do NOT add, unless explicitly asked:
+
+- Pinia or any global store
+- A router (single page, no routes)
+- Service workers, offline handling, caching layers
+- WebSockets, SSE, polling, retry/backoff
+- List virtualization, pagination, infinite scroll
+- Factories, DI containers, abstract base classes
+- Interfaces with exactly one implementation and no substitution boundary
+- Barrel files (`index.ts` re-exports) for a nine-file project
+- Telemetry or analytics stubs
+- Artificial async wrappers around the static JSON
+
+The payload is imported at build time. There is no runtime fetch, therefore no
+loading or transport-error state for the dashboard data. The only genuinely
+asynchronous and fallible operation is PDF generation.
+
+## Structure
+
+```
+src/
+  data/testing-data.json          payload verbatim, never edited
+  entitlements/types.ts           Tier, Capabilities
+  entitlements/capabilities.ts    tier to capability map
+  dashboard/*.vue                 presentation only
+  reports/generateReport.ts       jsPDF isolated here
+  styles/tokens.css
+```
+
+Dependency rule: `dashboard/` may import from `entitlements/` and `reports/`.
+Neither may import from `dashboard/`. Presentation depends on domain. Domain
+depends on nothing.
+
+Colocate tests with the code they cover. `capabilities.spec.ts` sits beside
+`capabilities.ts`, not in a top-level test folder.
+
+## The entitlement boundary
+
+This is the only domain logic in the application. It lives in exactly one file.
+
+```ts
+export type Tier = 'basic' | 'premium' | 'enterprise'
+
+export interface Capabilities {
+  viewAggregates: boolean
+  viewComparison: boolean
+  exportReport: boolean
+}
+
+const CAPABILITIES: Readonly<Record<Tier, Capabilities>> = Object.freeze({
+  basic: { viewAggregates: true, viewComparison: false, exportReport: false },
+  premium: { viewAggregates: true, viewComparison: true, exportReport: false },
+  enterprise: { viewAggregates: true, viewComparison: true, exportReport: true },
+})
+
+export function resolveCapabilities(tier: unknown): Capabilities {
+  return isTier(tier) ? CAPABILITIES[tier] : CAPABILITIES.basic
+}
+```
+
+Rules:
+
+- Components ask capabilities, never tiers. `can.viewComparison`, never
+  `tier === 'premium'`. If a tier string literal appears outside
+  `capabilities.ts`, the boundary has leaked.
+- `resolveCapabilities` fails closed. Unknown input returns Basic. It never
+  throws and it never grants.
+- `Record<Tier, Capabilities>` is deliberate: adding a tier is a compile error
+  until every capability is declared.
+
+## State
+
+- Derived values use `computed`. Never recompute in the template, never store
+  a derived value in a `ref` and mutate it.
+- Aggregate stats come from `aggregate_stats` in the payload. NEVER compute
+  them from the `products` array. The two describe different sets: the
+  aggregates cover 15 tested products, the array holds 3. Recomputing produces
+  different numbers.
+- `ttr_days` is presentation-only here. Surface it in the chart tooltip and
+  nowhere else.
+- Product ordering is presentational (descending by score for comparison
+  legibility). Do not describe it as a ranking supplied by the source.
+
+## Vendor isolation
+
+- Chart.js is imported in `ScoreComparison.vue` and nowhere else.
+- jsPDF is imported in `reports/generateReport.ts` and nowhere else.
+- `generateReport` returns a result, it does not throw:
+  `{ status: 'ok' } | { status: 'failed'; reason: string }`.
+  Translate the vendor error at this boundary; callers see application
+  semantics.
+
+## Access gates
+
+Two gated capabilities, one shared component.
+
+- Comparison gate (Basic): render `AccessGate` over an EMPTY plot area. Do not
+  render the real chart and blur or overlay it. CSS is not an access control,
+  and product data must not reach the DOM for a tier that cannot view it.
+- Export gate (Premium): a real `<button>` with `aria-disabled="true"`, NOT the
+  native `disabled` attribute. It stays keyboard focusable and announces its
+  state. `aria-disabled` is advisory only, so the click and keydown handlers
+  must refuse the action themselves and surface the reason. Helper text names
+  the requirement.
+
+## Types and mechanisms
+
+Choose the smallest mechanism that expresses the design.
+
+- Function for stateless behaviour. Class only where state, identity or
+  lifecycle justify it. There is none here.
+- Interface only where a substitution boundary exists.
+- Discriminated union where states are mutually exclusive and illegal
+  combinations should be unrepresentable (the report result).
+- No `any`. No non-null assertions. Model absence explicitly.
+
+## Naming
+
+Names describe intent and domain meaning: `resolveCapabilities`, not
+`getCaps`. `ScoreComparison`, not `Chart1`.
+
+## Comments
+
+A comment must explain why, never what. If a comment restates the code, the
+name was wrong; fix the name and delete the comment.
+
+Delete on sight:
+
+- Scaffold comments shipped by Vite, Vitest, Playwright or ESLint configs
+- Section banners and file headers
+- Comments narrating obvious code or restating a name or type
+- Commented-out code
+- JSDoc on functions whose signature already says it
+
+Keep only for non-obvious invariants, security reasoning, or runtime behaviour
+that cannot be expressed in code. TypeScript triple-slash directives are not
+comments and stay. The aggregates-are-not-derived-from-products constraint
+deserves one.
+
+Before committing: `grep -rn "^\s*//\|/\*" src/ e2e/ *.ts`
+
+## Styling
+
+- Tokens in `styles/tokens.css` as CSS custom properties. Seven colour roles:
+  brand, text-strong, text-weak, stroke-strong, stroke-weak, fill, background.
+- ICRT palette: navy `#003B4C` structural and chart bars, mint `#57E5C7`
+  interactive elements and the reference line, pale mint `#EAFBF8` surfaces.
+- Tailwind theme extends with these tokens. Arbitrary bracket values such as
+  `bg-[#003B4C]` are a defect.
+- 8px spacing scale. Type scale 1.2 from a 16px base.
+- No one-off colours or spacing values in components. Tokens only.
+- Focus indicators must be visible and must not rely on colour alone.
+
+## Testing
+
+Test behaviours, not implementations. Verify what a unit does, never how it
+does it internally.
+
+- Unit: `resolveCapabilities`. Each tier maps correctly, unknown input returns
+  Basic.
+- Component (Vue Test Utils): only components carrying behaviour. AccessGate
+  visibility, ReportExportButton refusing the action when ungated,
+  TierSwitcher emitting the change, ScoreComparison rendering or not rendering
+  by capability. Do not test components that only render a value.
+- E2E (Playwright): the three tier journeys, nothing else. The Basic spec must
+  assert product identifiers are absent from the DOM. That assertion is the
+  executable form of the Part B security claim.
+
+Do not test the same behaviour at two levels. Keep the pyramid the right way
+up: more fast tests than slow ones. Do not add a coverage threshold; coverage
+is a metric, not a goal. Do not edit tests to make an implementation pass.
+
+Leave zero type, lint or unused-import diagnostics.
+
+## Delivery
+
+- Docker: single multi-stage Dockerfile, node build to nginx serve. No
+  Compose, no Redis, no Postgres, no second service.
+- CI: lint, typecheck, unit, build and docker build in one job; Playwright
+  chromium in a second job. Cheap checks run first.
+- Node 22 in the Dockerfile, the CI workflow and `engines`. Keep all three
+  aligned.
+
+## Branching
+
+Trunk-based. Short-lived branches merged the same day. CI runs on push and
+pull_request. No merge without a green build.
+
+## Be able to answer, without hand-waving
+
+- What organising principle did I choose and why does it match this app?
+- Where does business logic live? Where does I/O happen?
+- What are the dependency rules?
+- Why is this a function rather than a class? Why is there no store?
+- Who owns this state?
+- Where are external libraries isolated?
+- Where is input validated and where does it fail closed?
+- Which invariants are encoded in types?
+- What did I deliberately not abstract because YAGNI?
+- What would I change first if the category grew to 500 products?
