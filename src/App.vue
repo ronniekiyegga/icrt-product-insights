@@ -1,9 +1,7 @@
 <script setup lang="ts">
-const title: string = 'ICRT'
+import DashboardView from './dashboard/DashboardView.vue'
 </script>
 
 <template>
-  <main class="min-h-screen bg-white p-8">
-    <h1 class="text-3xl font-bold text-slate-900">{{ title }} Product Insights</h1>
-  </main>
+  <DashboardView />
 </template>

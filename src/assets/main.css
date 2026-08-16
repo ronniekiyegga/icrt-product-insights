@@ -1,1 +1,166 @@
-@import "tailwindcss";
+@import 'tailwindcss';
+
+@theme {
+  --color-text-strong: #000626e6;
+  --color-text-weak: #000933a6;
+  --color-text-brand: #0eb8a0;
+  --color-text-disabled: #0011661a;
+  --color-text-error: #c73a3a;
+  --color-text-warning: #8f6c1a;
+  --color-text-success: #067a57;
+  --color-text-information: #1a74a8;
+
+  --color-stroke-strong: #000d4d73;
+  --color-stroke-weak: #0011661a;
+  --color-stroke-selected: #0eb8a0;
+  --color-stroke-focus: #0eb8a0;
+  --color-stroke-disabled: #0011661a;
+  --color-stroke-brand-strong: #0eb8a0;
+  --color-stroke-brand-weak: #0eb8a033;
+  --color-stroke-error-strong: #c73a3acc;
+  --color-stroke-error-weak: #c73a3a24;
+  --color-stroke-success-strong: #067a57cc;
+  --color-stroke-success-weak: #0eb8a01a;
+
+  --color-icon-neutral: #000d4d73;
+  --color-icon-brand: #0eb8a0;
+  --color-icon-disabled: #0011661a;
+  --color-icon-error: #c73a3a;
+  --color-icon-warning: #8f6c1ae6;
+  --color-icon-success: #067a57cc;
+  --color-icon-information: #1a74a8cc;
+
+  --color-background-base: #ffffff;
+  --color-background-raised: #ffffff;
+  --color-background-overlay: #ffffff;
+  --color-background-card: #fafafa;
+
+  --color-brand: #0eb8a0;
+  --color-brand-deep: #003b4c;
+  --color-chart-bar: #003b4c;
+  --color-chart-reference: #0eb8a0;
+
+  --color-gradient-red-from: #ff3b3b;
+  --color-gradient-red-to: #6600cc;
+  --color-gradient-blue-from: #667bf6;
+  --color-gradient-blue-to: #26d0ce;
+  --color-gradient-hover: #3e7bfa;
+
+  --opacity-hover-fill: 0.04;
+
+  --background-image-gradient-base: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    rgb(251 233 217 / 0.59) 33%,
+    #dedaf9 75%,
+    rgb(240 172 247 / 0.76) 100%
+  );
+  --background-image-gradient-red: linear-gradient(
+    180deg,
+    #ff3b3b 0%,
+    #6600cc 100%
+  );
+  --background-image-gradient-blue: linear-gradient(
+    180deg,
+    #667bf6 0%,
+    #26d0ce 100%
+  );
+  --background-image-gradient-black: linear-gradient(
+    180deg,
+    #010100 2%,
+    #0a1124 37%,
+    #2b3a4c 53%,
+    #0a1124 69%,
+    #010100 100%
+  );
+  --background-image-gradient-hover: linear-gradient(
+    90deg,
+    rgb(62 123 250 / 0.5) 16%,
+    rgb(102 0 204 / 1) 38%,
+    rgb(102 0 204 / 0) 65%,
+    rgb(62 123 250 / 0.5) 94%
+  );
+
+  --text-display: clamp(40px, 2.05rem + 1.94vw, 56px);
+  --text-display--line-height: 1.14;
+  --text-display--font-weight: 700;
+
+  --text-annotation: 12px;
+  --text-annotation--line-height: 1.2;
+
+  --text-supertiny: 12px;
+  --text-supertiny--line-height: 1.67;
+
+  --text-h1: clamp(36px, 2.14rem + 0.48vw, 40px);
+  --text-h1--line-height: 1.2;
+  --text-h1--font-weight: 700;
+
+  --text-h2: clamp(28px, 1.64rem + 0.48vw, 32px);
+  --text-h2--line-height: 1.25;
+  --text-h2--font-weight: 700;
+
+  --text-h3: 24px;
+  --text-h3--line-height: 1.33;
+  --text-h3--font-weight: 700;
+
+  --text-h4: 20px;
+  --text-h4--line-height: 1.4;
+  --text-h4--font-weight: 700;
+
+  --text-small: 16px;
+  --text-small--line-height: 1.5;
+
+  --text-tiny: 14px;
+  --text-tiny--line-height: 1.43;
+
+  --shadow-card: 0 18px 48px rgb(0 0 0 / 0.07);
+  --shadow-button: 0 9px 9px -5px rgb(0 0 0 / 0.04), 0 23px 28px -5px rgb(0 0 0 / 0.08);
+
+  --breakpoint-tablet: 768px;
+  --breakpoint-desktop: 1200px;
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    background-color: var(--color-background-base);
+    color: var(--color-text-strong);
+    font-size: var(--text-small);
+    line-height: var(--text-small--line-height);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-stroke-focus);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .page {
+    width: 100%;
+    max-width: 1200px;
+    margin-inline: auto;
+    padding-inline: 32px;
+  }
+
+  .icrt-mark {
+    mask: url('/ICRT.svg') center / contain no-repeat;
+    -webkit-mask: url('/ICRT.svg') center / contain no-repeat;
+  }
+
+  @media (min-width: 768px) {
+    .page {
+      padding-inline: 40px;
+    }
+  }
+
+  @media (min-width: 1200px) {
+    .page {
+      padding-inline: 0;
+    }
+  }
+}
