@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import TierSwitcher from './TierSwitcher.vue'
+import TierSwitcher from '../TierSwitcher.vue'
 
 describe('TierSwitcher', () => {
   it('emits the selected tier', async () => {

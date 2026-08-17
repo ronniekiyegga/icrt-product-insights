@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import DashboardView from './DashboardView.vue'
+import DashboardView from '../DashboardView.vue'
 
 describe('DashboardView', () => {
   it('keeps product identifiers out of the DOM when comparison is gated', () => {

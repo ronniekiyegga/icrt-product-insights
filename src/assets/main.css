@@ -61,7 +61,10 @@
   --opacity-placeholder: 0.85;
   --opacity-divider: 0.2;
   --opacity-icon-muted: 0.5;
+  --opacity-tier-badge-ring: 0.3;
   --duration-fade: 200ms;
+
+  --z-tier-content: 1;
 
   --width-skeleton-lead: 92%;
   --width-skeleton-mid: 85%;
@@ -88,7 +91,7 @@
   );
   --background-image-gradient-red: linear-gradient(180deg, #ff3b3b 0%, #6600cc 100%);
   --background-image-gradient-blue: linear-gradient(180deg, #667bf6 0%, #26d0ce 100%);
-  --background-image-gradient-premium-menu: linear-gradient(180deg, #00cfde 0%, #05a660 100%);
+  --background-image-gradient-green: linear-gradient(180deg, #00cfde 0%, #05a660 100%);
   --background-image-gradient-gate-action: linear-gradient(
     177deg,
     #012d3a -16.07%,
@@ -209,8 +212,8 @@
   --shadow-tooltip: 4px 10px 20px 0 rgb(219 220 230 / 0.28);
   --shadow-tier-badge: 0 1.5px 9.75px 0 rgb(0 0 251 / 0.4);
   --shadow-tier-menu: 4px 20px 40px 0 rgb(219 222 230 / 0.3);
-  --shadow-tier-menu-dot-basic: 0 0 8px 0 rgb(102 123 246 / 0.55);
-  --shadow-tier-menu-dot-premium: 0 0 8px 0 rgb(0 207 222 / 0.5);
+  --shadow-tier-menu-dot-basic: 0 0 8px 0 rgb(0 207 222 / 0.5);
+  --shadow-tier-menu-dot-premium: 0 0 8px 0 rgb(102 123 246 / 0.55);
   --shadow-tier-menu-dot-enterprise: 0 0 8px 0 rgb(102 0 204 / 0.55);
 
   --radius-tooltip: 0.27131rem;
@@ -386,6 +389,10 @@
     box-shadow: var(--shadow-tier-badge);
   }
 
+  .tier-badge--overlay {
+    background-color: rgb(255 255 255 / var(--opacity-tier-badge-ring));
+  }
+
   .tier-badge-dot {
     width: var(--size-tier-badge-dot);
     height: var(--size-tier-badge-dot);
@@ -393,15 +400,15 @@
     border-radius: 9999px;
   }
 
-  .tier-switcher-menu .tier-badge--basic {
+  .tier-badge--basic {
     box-shadow: var(--shadow-tier-menu-dot-basic);
   }
 
-  .tier-switcher-menu .tier-badge--premium {
+  .tier-badge--premium {
     box-shadow: var(--shadow-tier-menu-dot-premium);
   }
 
-  .tier-switcher-menu .tier-badge--enterprise {
+  .tier-badge--enterprise {
     box-shadow: var(--shadow-tier-menu-dot-enterprise);
   }
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { testingData } from '../data/testingData'
+import { testingData } from '../../data/testingData'
 
 const productCount = computed(
   () => `${testingData.products.length} of ${testingData.aggregate_stats.total_tested} products shown`,

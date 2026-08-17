@@ -9,7 +9,11 @@ import {
   type ScriptableContext,
 } from 'chart.js'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { testingData, type Product } from '../data/testingData'
+import { testingData, type Product } from '../../data/testingData'
+import { readChartTokens, type ChartTokens } from './chartTokens'
+import ProductScoreTable from './ProductScoreTable.vue'
+import ScoreComparisonScale from './ScoreComparisonScale.vue'
+import ScoreComparisonTooltip from './ScoreComparisonTooltip.vue'
 
 Chart.register(BarController, BarElement, CategoryScale, LinearScale)
 
@@ -17,22 +21,31 @@ const canvas = ref<HTMLCanvasElement | null>(null)
 const overlayRoot = ref<HTMLElement | null>(null)
 let chart: Chart<'bar'> | undefined
 let tabletQuery: MediaQueryList | undefined
+let chartTokens: Readonly<ChartTokens> | undefined
+let labelFontFamily = ''
+let reducedMotion = false
 
 const products = testingData.products.slice().sort((left, right) => right.score - left.score)
-const scaleTicks = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-const defaultTooltipIndex = Math.max(
-  0,
-  products.findIndex((product) => product.score === 85),
-)
-const defaultProduct = products[defaultTooltipIndex]
+const restingTooltipIndex = products.reduce((closest, product, index) => {
+  const avgScore = testingData.aggregate_stats.avg_score
+  const closestProduct = products[closest]
+  if (closestProduct === undefined) {
+    return index
+  }
+
+  return Math.abs(product.score - avgScore) < Math.abs(closestProduct.score - avgScore)
+    ? index
+    : closest
+}, 0)
+const restingProduct = products[restingTooltipIndex]
 
 const scaleInset = ref({ left: 0, right: 0 })
 const tooltipState = ref({
   visible: true,
-  brand: defaultProduct?.brand ?? '',
-  model: defaultProduct?.model ?? '',
-  score: defaultProduct?.score ?? 0,
-  ttrDays: defaultProduct?.ttr_days ?? 0,
+  brand: restingProduct?.brand ?? '',
+  model: restingProduct?.model ?? '',
+  score: restingProduct?.score ?? 0,
+  ttrDays: restingProduct?.ttr_days ?? 0,
 })
 const tooltipX = ref(0)
 let tooltipTargetX = 0
@@ -52,22 +65,17 @@ function productLabel(product: Product): string {
   return `${product.brand} ${product.model}`
 }
 
-function readToken(token: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(token).trim()
-}
-
-function readPx(token: string, fallback: number): number {
-  const value = Number.parseFloat(readToken(token))
-  return Number.isFinite(value) && value > 0 ? value : fallback
-}
-
 function isTablet(): boolean {
-  const tablet = readPx('--breakpoint-tablet', 768)
+  const tablet = chartTokens?.breakpointTablet ?? 768
   return window.matchMedia(`(min-width: ${String(tablet)}px)`).matches
 }
 
 function barThickness(): number {
-  return isTablet() ? readPx('--height-chart-bar', 40) : readPx('--height-chart-bar-mobile', 36)
+  if (chartTokens === undefined) {
+    return 36
+  }
+
+  return isTablet() ? chartTokens.barHeight : chartTokens.barHeightMobile
 }
 
 function barGap(): number {
@@ -75,9 +83,14 @@ function barGap(): number {
 }
 
 function barFill(context: ScriptableContext<'bar'>): CanvasGradient | string {
-  const from = readToken('--color-chart-bar')
-  const mid = readToken('--color-chart-bar-mid')
-  const to = readToken('--color-chart-bar-to')
+  const tokens = chartTokens
+  if (tokens === undefined) {
+    return ''
+  }
+
+  const from = tokens.barGradientFrom
+  const mid = tokens.barGradientMid
+  const to = tokens.barGradientTo
   if (from === '') {
     return from
   }
@@ -117,6 +130,13 @@ function easeInOutCubic(t: number): number {
 }
 
 function easeTooltipTo(x: number, phase: 'enter' | 'leave') {
+  if (reducedMotion) {
+    tooltipX.value = x
+    tooltipTargetX = x
+    tooltipPhase = phase === 'enter' ? 'track' : 'rest'
+    return
+  }
+
   tooltipEaseFrom = tooltipX.value
   tooltipEaseTo = x
   tooltipTargetX = x
@@ -145,7 +165,7 @@ function hitAtClient(clientX: number, clientY: number) {
 function tickMotion() {
   let moving = false
 
-  if (tooltipPhase === 'enter' || tooltipPhase === 'leave') {
+  if (!reducedMotion && (tooltipPhase === 'enter' || tooltipPhase === 'leave')) {
     const t = Math.min(1, (performance.now() - tooltipEaseStartedAt) / tooltipEaseMs)
     const to = tooltipPhase === 'enter' ? tooltipTargetX : tooltipEaseTo
     tooltipX.value = tooltipEaseFrom + (to - tooltipEaseFrom) * easeInOutCubic(t)
@@ -157,22 +177,24 @@ function tickMotion() {
     }
   }
 
-  let barsMoving = false
-  for (const [index, opacity] of barOpacities.entries()) {
-    const target = barOpacityTargets[index] ?? 1
-    const delta = target - opacity
-    if (Math.abs(delta) < 0.004) {
-      barOpacities[index] = target
-      continue
+  if (!reducedMotion) {
+    let barsMoving = false
+    for (const [index, opacity] of barOpacities.entries()) {
+      const target = barOpacityTargets[index] ?? 1
+      const delta = target - opacity
+      if (Math.abs(delta) < 0.004) {
+        barOpacities[index] = target
+        continue
+      }
+
+      barOpacities[index] = opacity + delta * barDimFollow
+      barsMoving = true
+      moving = true
     }
 
-    barOpacities[index] = opacity + delta * barDimFollow
-    barsMoving = true
-    moving = true
-  }
-
-  if (barsMoving) {
-    chart?.draw()
+    if (barsMoving) {
+      chart?.draw()
+    }
   }
 
   if (moving) {
@@ -232,6 +254,10 @@ function placeTooltipOnBar(index: number, immediate = false) {
 }
 
 function setHoveredBar(index: number | null) {
+  if (reducedMotion) {
+    return
+  }
+
   for (const [barIndex] of barOpacityTargets.entries()) {
     barOpacityTargets[barIndex] = index !== null && barIndex !== index ? barUnhoveredOpacity : 1
   }
@@ -273,7 +299,7 @@ function onCanvasMove(event: MouseEvent) {
 function onCanvasLeave() {
   setHoveredBar(null)
   if (isTablet()) {
-    placeTooltipOnBar(defaultTooltipIndex)
+    placeTooltipOnBar(restingTooltipIndex)
     easeTooltipTo(tooltipTargetX, 'leave')
     return
   }
@@ -332,7 +358,7 @@ function applyChartLayout() {
   }
   chart.update()
   if (isTablet()) {
-    placeTooltipOnBar(defaultTooltipIndex, true)
+    placeTooltipOnBar(restingTooltipIndex, true)
     return
   }
 
@@ -361,16 +387,20 @@ const fadeUnhovered: Plugin<'bar'> = {
 const endLabels: Plugin<'bar'> = {
   id: 'endLabels',
   afterDatasetsDraw(chartInstance) {
+    const tokens = chartTokens
+    if (tokens === undefined) {
+      return
+    }
+
     const meta = chartInstance.getDatasetMeta(0)
     const { ctx } = chartInstance
     const tablet = isTablet()
-    const size = tablet ? readPx('--text-tiny', 14) : readPx('--text-annotation', 12)
-    const family = getComputedStyle(document.body).fontFamily
-    const fill = readToken('--color-text-weak')
+    const size = tablet ? tokens.textTinySize : tokens.textAnnotationSize
+    const fill = tokens.textWeak
 
     ctx.save()
     ctx.fillStyle = fill
-    ctx.font = `400 ${String(size)}px ${family}`
+    ctx.font = `400 ${String(size)}px ${labelFontFamily}`
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
 
@@ -410,12 +440,12 @@ onMounted(() => {
     return
   }
 
-  tabletQuery = window.matchMedia(`(min-width: ${String(readPx('--breakpoint-tablet', 768))}px)`)
-  tabletQuery.addEventListener('change', applyChartLayout)
+  chartTokens = readChartTokens()
+  labelFontFamily = getComputedStyle(document.body).fontFamily
+  reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-  const labelColor = readToken('--color-text-weak')
-  const labelSize = readPx('--text-annotation', 12)
-  const fontFamily = getComputedStyle(document.body).fontFamily
+  tabletQuery = window.matchMedia(`(min-width: ${String(chartTokens.breakpointTablet)}px)`)
+  tabletQuery.addEventListener('change', applyChartLayout)
 
   chart = new Chart(el, {
     type: 'bar',
@@ -472,11 +502,11 @@ onMounted(() => {
           },
           ticks: {
             display: isTablet(),
-            color: labelColor,
+            color: chartTokens.textWeak,
             padding: 12,
             font: {
-              size: labelSize,
-              family: fontFamily,
+              size: chartTokens.textAnnotationSize,
+              family: labelFontFamily,
             },
           },
           afterFit(axis) {
@@ -491,7 +521,7 @@ onMounted(() => {
   })
 
   if (isTablet()) {
-    placeTooltipOnBar(defaultTooltipIndex, true)
+    placeTooltipOnBar(restingTooltipIndex, true)
     return
   }
 
@@ -510,7 +540,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="relative h-chart overflow-visible">
     <div ref="overlayRoot" class="relative size-full overflow-visible">
-      <div class="size-full border-l-6 border-background-card pl-4 md:pl-8">
+      <div class="size-full border-l-6 border-background-card pl-4 tablet:pl-8">
         <canvas
           ref="canvas"
           class="size-full tablet:cursor-pointer"
@@ -524,97 +554,16 @@ onBeforeUnmount(() => {
           @touchcancel="onCanvasTouchEnd"
         />
       </div>
-      <div
-        v-show="tooltipState.visible"
-        class="tooltip-axis-anchor pointer-events-none absolute left-0 z-20 flex flex-col items-center"
-        :style="{
-          transform: `translate3d(${String(tooltipX)}px, 0, 0) translateX(-50%)`,
-          top: 'calc(var(--height-tooltip) * -1)',
-        }"
-      >
-        <div class="w-44 shrink-0 rounded-tooltip bg-background-base p-px shadow-tooltip">
-          <div
-            class="flex flex-col gap-1 rounded-tooltip border-tooltip border-stroke-tooltip bg-tooltip px-0.5 py-1.5"
-          >
-            <div class="flex items-center justify-between px-2">
-              <span class="font-medium text-tooltip text-text-strong">{{
-                tooltipState.brand
-              }}</span>
-              <span class="flex items-center gap-1">
-                <span class="font-medium text-tooltip-sm text-text-faint">{{
-                  tooltipState.score
-                }}</span>
-                <span class="flex h-2 items-end gap-px" aria-hidden="true">
-                  <span
-                    class="h-1 w-px rounded-full bg-linear-to-b from-gradient-hover to-gradient-red-to"
-                  />
-                  <span
-                    class="h-1.5 w-px rounded-full bg-linear-to-b from-gradient-hover to-gradient-red-to"
-                  />
-                  <span
-                    class="h-2 w-px rounded-full bg-linear-to-b from-gradient-hover to-gradient-red-to"
-                  />
-                </span>
-              </span>
-            </div>
-            <div class="mx-2 border-t border-stroke-weak" />
-            <div class="flex items-center justify-between gap-2 px-2 py-1">
-              <span class="flex items-center gap-1">
-                <span
-                  class="size-2 shrink-0 rounded-full border border-background-base bg-tooltip-marker"
-                  aria-hidden="true"
-                />
-                <span class="font-medium text-tooltip-sm text-text-navy">{{
-                  tooltipState.model
-                }}</span>
-              </span>
-              <span class="font-normal text-tooltip-meta text-text-navy">
-                TTR ({{ tooltipState.ttrDays }} days)
-              </span>
-            </div>
-          </div>
-        </div>
-        <div class="min-h-0 w-px flex-1 border-l border-dashed border-brand" />
-        <span class="size-2.5 shrink-0 rounded-full bg-brand" aria-hidden="true" />
-      </div>
+      <ScoreComparisonTooltip
+        :visible="tooltipState.visible"
+        :x="tooltipX"
+        :brand="tooltipState.brand"
+        :model="tooltipState.model"
+        :score="tooltipState.score"
+        :ttr-days="tooltipState.ttrDays"
+      />
     </div>
-    <div class="absolute inset-x-0 top-full pl-4 pt-4 md:pl-8 tablet:pt-16">
-      <div
-        class="flex justify-between text-annotation text-stroke-strong tablet:text-tiny"
-        :style="{
-          paddingLeft: `${String(scaleInset.left)}px`,
-          paddingRight: `${String(scaleInset.right)}px`,
-        }"
-      >
-        <span v-for="tick in scaleTicks" :key="tick">{{ tick }}</span>
-      </div>
-    </div>
-    <table class="sr-only">
-      <caption>
-        Product scores,
-        {{
-          products.length
-        }}
-        of
-        {{
-          testingData.aggregate_stats.total_tested
-        }}
-        tested
-      </caption>
-      <thead>
-        <tr>
-          <th>Product</th>
-          <th>Score</th>
-          <th>Time to result</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="product in products" :key="product.id">
-          <td>{{ productLabel(product) }}</td>
-          <td>{{ product.score }}</td>
-          <td>{{ product.ttr_days }} days</td>
-        </tr>
-      </tbody>
-    </table>
+    <ScoreComparisonScale :inset-left="scaleInset.left" :inset-right="scaleInset.right" />
+    <ProductScoreTable />
   </div>
 </template>

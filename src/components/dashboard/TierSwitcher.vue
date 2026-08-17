@@ -1,10 +1,21 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { TIERS } from '../entitlements/capabilities'
-import type { Tier } from '../entitlements/types'
+import { TIERS } from '../../entitlements/capabilities'
+import type { Tier } from '../../entitlements/types'
 import Avatar from '../ui/Avatar.vue'
-import TierCaret from '../ui/TierCaret.vue'
-import { TIER_GRADIENT, TIER_MENU_DOT, TIER_MENU_DOT_RING } from './tierGradient'
+import TierCaret from '../icons/TierCaret.vue'
+
+const TIER_DOT: Record<Tier, string> = {
+  basic: 'bg-gradient-green',
+  premium: 'bg-gradient-blue',
+  enterprise: 'bg-gradient-red',
+}
+
+const TIER_DOT_RING: Record<Tier, string> = {
+  basic: 'tier-badge--basic',
+  premium: 'tier-badge--premium',
+  enterprise: 'tier-badge--enterprise',
+}
 
 defineProps<{
   tier: Tier
@@ -94,8 +105,12 @@ onBeforeUnmount(() => {
     >
       <span class="relative shrink-0">
         <Avatar src="/avatar.jpg" alt="" initials="JD" />
-        <span class="tier-badge absolute right-0 bottom-0 z-20" aria-hidden="true">
-          <span class="tier-badge-dot" :class="TIER_GRADIENT[tier]" />
+        <span
+          class="tier-badge tier-badge--overlay absolute right-0 bottom-0 z-20"
+          :class="TIER_DOT_RING[tier]"
+          aria-hidden="true"
+        >
+          <span class="tier-badge-dot" :class="TIER_DOT[tier]" />
         </span>
       </span>
       <span class="flex flex-col gap-tier-label-stack text-left">
@@ -128,13 +143,13 @@ onBeforeUnmount(() => {
               />
               <button type="button" class="tier-switcher-menu-button" @click="pick(option)">
                 <span
-                  class="tier-badge relative z-[1]"
-                  :class="TIER_MENU_DOT_RING[option]"
+                  class="tier-badge relative z-(--z-tier-content)"
+                  :class="TIER_DOT_RING[option]"
                   aria-hidden="true"
                 >
-                  <span class="tier-badge-dot" :class="TIER_MENU_DOT[option]" />
+                  <span class="tier-badge-dot" :class="TIER_DOT[option]" />
                 </span>
-                <span class="relative z-[1] capitalize">{{ option }}</span>
+                <span class="relative z-(--z-tier-content) capitalize">{{ option }}</span>
               </button>
             </div>
             <hr v-if="index < TIERS.length - 1" class="tier-switcher-menu-divider" />

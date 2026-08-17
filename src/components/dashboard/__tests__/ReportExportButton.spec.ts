@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import ReportExportButton from './ReportExportButton.vue'
+import ReportExportButton from '../ReportExportButton.vue'
 
 describe('ReportExportButton', () => {
   it('refuses the action when ungated', async () => {

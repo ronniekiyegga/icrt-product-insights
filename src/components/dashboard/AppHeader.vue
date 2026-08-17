@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Tier } from '../entitlements/types'
+import type { Tier } from '../../entitlements/types'
 import TierSwitcher from './TierSwitcher.vue'
 
 defineProps<{
@@ -12,7 +12,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <header class="relative z-30 w-full bg-background-base mb-4 tablet:mb-4">
+  <header class="relative z-30 w-full bg-background-base mb-4">
     <div class="page flex items-center justify-between border-b border-stroke-weak py-4">
       <div class="flex items-center gap-2">
         <div class="flex items-center gap-1">

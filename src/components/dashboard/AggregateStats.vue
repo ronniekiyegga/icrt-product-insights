@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { testingData } from '../data/testingData'
+import { testingData } from '../../data/testingData'
 import StatCard from '../ui/StatCard.vue'
-import IcrtMark from './IcrtMark.vue'
+import IcrtMark from '../icons/IcrtMark.vue'
 
 const aggregateCards = computed(() => {
   const { category, aggregate_stats, products } = testingData

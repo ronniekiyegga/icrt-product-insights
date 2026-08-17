@@ -1,23 +1,43 @@
 <script setup lang="ts">
 import { ChartNoAxesColumn } from '@lucide/vue'
-import { computed, ref } from 'vue'
+import { computed, defineAsyncComponent, ref } from 'vue'
 import { resolveCapabilities } from '../entitlements/capabilities'
 import type { Tier } from '../entitlements/types'
-import ChartSkeleton from '../ui/ChartSkeleton.vue'
-import PageHeading from '../ui/PageHeading.vue'
-import AggregateStats from './AggregateStats.vue'
-import AppFooter from './AppFooter.vue'
-import AppHeader from './AppHeader.vue'
-import ComparisonGate from './ComparisonGate.vue'
-import ReportExportButton from './ReportExportButton.vue'
-import ScoreComparison from './ScoreComparison.vue'
-import SectionNav from './SectionNav.vue'
+import ChartSkeleton from '../components/ui/ChartSkeleton.vue'
+import PageHeading from '../components/ui/PageHeading.vue'
+import AggregateStats from '../components/dashboard/AggregateStats.vue'
+import AppFooter from '../components/dashboard/AppFooter.vue'
+import AppHeader from '../components/dashboard/AppHeader.vue'
+import ComparisonGate from '../components/dashboard/ComparisonGate.vue'
+import ReportExportButton from '../components/dashboard/ReportExportButton.vue'
+import SectionNav from '../components/dashboard/SectionNav.vue'
+import { generateReport } from '../reports/generateReport'
+
+const ScoreComparison = defineAsyncComponent({
+  loader: () => import('../components/dashboard/ScoreComparison.vue'),
+  loadingComponent: ChartSkeleton,
+  delay: 0,
+})
 
 const tier = ref<Tier>('basic')
 const capabilities = computed(() => resolveCapabilities(tier.value))
+const exportPending = ref(false)
+const exportError = ref('')
 
-function onExport() {
-  return
+async function onExport() {
+  if (exportPending.value || !capabilities.value.exportReport) {
+    return
+  }
+
+  exportPending.value = true
+  exportError.value = ''
+
+  const result = await generateReport()
+  exportPending.value = false
+
+  if (result.status === 'failed') {
+    exportError.value = result.reason
+  }
 }
 </script>
 
@@ -36,6 +56,8 @@ function onExport() {
             <ReportExportButton
               :enabled="capabilities.exportReport"
               :visible="capabilities.viewComparison"
+              :busy="exportPending"
+              :error="exportError"
               @export="onExport"
             />
           </PageHeading>

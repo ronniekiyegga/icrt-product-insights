@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import AccessGate from './AccessGate.vue'
+import AccessGate from '../AccessGate.vue'
 
 describe('AccessGate', () => {
   it('renders the gate copy', () => {
