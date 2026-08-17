@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import ExportDownloadIcon from '../icons/ExportDownloadIcon.vue'
 
 const props = withDefaults(
@@ -17,6 +18,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   export: []
 }>()
+
+const showGateReason = computed(() => props.visible && !props.enabled && !props.busy)
 
 function onClick() {
   if (!props.visible || !props.enabled || props.busy) {
@@ -54,7 +57,7 @@ function onKeydown(event: KeyboardEvent) {
       :tabindex="visible ? undefined : -1"
       :aria-disabled="enabled && !busy ? undefined : true"
       :aria-busy="busy ? true : undefined"
-      :aria-describedby="visible && !enabled ? 'export-gate-reason' : undefined"
+      :aria-describedby="showGateReason ? 'export-gate-reason' : undefined"
       @click="onClick"
       @keydown="onKeydown"
     >
@@ -78,8 +81,8 @@ function onKeydown(event: KeyboardEvent) {
     <p
       id="export-gate-reason"
       class="min-h-[var(--height-export-gate-reason)] w-full shrink-0 text-center font-normal text-annotation leading-[var(--text-annotation--line-height)] text-text-weak tablet:text-right"
-      :class="visible && !enabled ? undefined : 'invisible'"
-      :aria-hidden="visible && !enabled ? undefined : true"
+      :class="showGateReason ? undefined : 'invisible'"
+      :aria-hidden="showGateReason ? undefined : true"
     >
       Report export requires Enterprise access
     </p>

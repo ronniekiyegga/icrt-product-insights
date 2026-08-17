@@ -12,9 +12,10 @@ describe('ReportExportButton', () => {
     expect(button.classes()).toContain('text-text-disabled')
     expect(button.classes()).not.toContain('bg-gradient-chart-bar')
     expect(button.attributes('aria-describedby')).toBe('export-gate-reason')
-    expect(wrapper.get('#export-gate-reason').text()).toBe(
-      'Report export requires Enterprise access',
-    )
+    const gateReason = wrapper.get('#export-gate-reason')
+    expect(gateReason.text()).toBe('Report export requires Enterprise access')
+    expect(gateReason.classes()).not.toContain('invisible')
+    expect(gateReason.attributes('aria-hidden')).toBeUndefined()
 
     await button.trigger('click')
     await button.trigger('keydown.enter')

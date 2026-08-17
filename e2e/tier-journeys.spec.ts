@@ -8,7 +8,7 @@ async function selectTier(page: Page, tier: 'premium' | 'enterprise') {
 test('Basic keeps product identifiers out of the DOM', async ({ page }) => {
   await page.goto('/')
 
-  await expect(page.getByText('Unlock product-level insights')).toBeVisible()
+  await expect(page.getByText('Product-level results')).toBeVisible()
   await expect(page.locator('body')).not.toContainText(/BrandA|BrandB|BrandC|DW-100|DW-200|DW-300/)
 })
 
@@ -22,12 +22,13 @@ test('Premium keeps report export focusable without downloading', async ({ page 
 
   await exportButton.focus()
   await expect(exportButton).toBeFocused()
+  await expect(exportButton).toHaveAttribute('aria-describedby', 'export-gate-reason')
 
   const download = page.waitForEvent('download', { timeout: 750 }).then(
     () => true,
     () => false,
   )
-  await exportButton.click()
+  await page.keyboard.press('Enter')
 
   expect(await download).toBe(false)
   await expect(page.getByText('Report export requires Enterprise access')).toBeVisible()
