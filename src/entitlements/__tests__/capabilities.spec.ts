@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveCapabilities } from './capabilities'
+import { resolveCapabilities } from '../capabilities'
 
 describe('resolveCapabilities', () => {
   it('basic resolves to aggregates only', () => {

@@ -1,0 +1,186 @@
+---
+description: Implementation-level design. Where responsibilities live, what each part is allowed to know.
+alwaysApply: true
+---
+
+# Implementation design
+
+Software design is deciding where responsibilities live, what each part is
+allowed to know, and how change moves through the codebase.
+
+The unit of success is not lines written. It is a codebase where another
+engineer can infer where to make a change before opening many files.
+
+## The composition rule
+
+A file renders its own markup and composes children. It never contains
+another component's logic.
+
+If a block inside a template can be named with a noun phrase, it is a
+component. `PageHeading`, `SectionNav`, `ReportExportButton`, `StatCard`.
+If you cannot name it, it belongs where it is.
+
+Three signals that a block should be extracted:
+
+- It has its own imports that nothing else in the file uses. An icon
+  imported for one button means the button is a component.
+- It has its own state, its own handler, or its own conditional.
+- Copying it to a second location would be the only way to reuse it.
+
+A parent that imports six children and renders them is clean, however long
+the import list. A parent that inlines two children's markup is not, however
+short.
+
+## Two scales
+
+**Repository scale.** Where do responsibilities belong across the system?
+Where does business logic live? Where does I/O happen? What can depend on
+what? Where would a new capability be added? Where would an external
+provider be replaced? Where are invariants enforced? Where are errors
+translated? What can be tested without starting the whole application?
+
+**Code scale.** How should one responsibility be represented? Function,
+type, interface, class, union, module. Does this unit have one coherent
+reason to change? Who owns this state? Where does this dependency enter?
+Is an illegal state representable? Is this abstraction solving a real
+problem or adding ceremony?
+
+## Responsibility and cohesion
+
+SRP is not "small files". A module should have one coherent reason to
+change. A long file is not automatically bad. A short file is not
+automatically good.
+
+The useful question: are unrelated responsibilities changing for unrelated
+reasons inside the same unit?
+
+Signals to extract: mixed concerns that change on different schedules,
+mixed I/O and decision-making, mixed presentation and orchestration.
+
+## Boundaries and dependency direction
+
+| Boundary        | Responsibility                                       |
+| --------------- | ---------------------------------------------------- |
+| Presentation    | Render state, capture interaction                    |
+| Transport       | Validate, authenticate, translate protocol, delegate |
+| Application     | Orchestrate use cases                                |
+| Domain          | Make business decisions, enforce invariants          |
+| Infrastructure  | Persistence, queues, filesystem, network             |
+| Vendor adapters | Translate third-party SDKs behind owned boundaries   |
+
+Dependencies point inward. Presentation depends on domain. Domain depends
+on nothing.
+
+Invert a dependency when the application needs a stable capability but the
+implementation is volatile or external. The interface is owned by the
+consumer, not the vendor.
+
+Do not force textbook layers onto a small application. Make dependency
+direction deliberate and state it in one sentence.
+
+## Choosing a mechanism
+
+Choose the smallest mechanism that expresses the design.
+
+| Use                 | When                                                                          | Avoid when                                       |
+| ------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------ |
+| Function            | Stateless behaviour, focused transformation                                   | You need identity or lifecycle                   |
+| Type                | Aliases, unions, composed shapes                                              | You need an implementation contract              |
+| Interface           | A stable consumer-owned substitution boundary                                 | One implementation, no boundary                  |
+| Class               | State, identity, lifecycle, polymorphism justify it                           | It only wraps stateless functions                |
+| Discriminated union | States are mutually exclusive, illegal combinations should be unrepresentable | A scalar already expresses it                    |
+| Generic             | A real reusable relationship between types                                    | It adds abstraction without reducing duplication |
+| Module              | Several functions share one coherent responsibility                           | It becomes utils/common/helpers                  |
+
+A single value used in a single place is not a module. Extracting it to a
+shared folder is over-correction, not decomposition. Move it down to the
+component that owns it.
+
+## Domain modelling
+
+Make invalid states hard to represent. Centralise invariants where the
+domain concept lives.
+
+Prefer a discriminated union over a loose object with optional fields when
+the compiler can then prevent impossible combinations.
+
+Create value objects and explicit domain types when they encode a real
+invariant. Not because the literature contains those names.
+
+## Failure design
+
+Own and translate failures at deliberate boundaries. Vendor errors should
+not leak through the application in vendor-specific shapes.
+
+- Typed errors where callers need programmatic discrimination
+- Retries only where retry is safe and meaningful
+- Translate at the boundary, not in domain logic
+- Fail closed where ambiguous output would be dangerous
+- Do not introduce unused error classes to satisfy a plan
+
+## Naming
+
+Names describe intent and domain meaning. Naming is design because it
+reduces the reconstruction required from the reader.
+
+`measurePullRequest` not `measureOne`. `formatPercentage` not `pct`.
+`resolveCapabilities` not `getCaps`.
+
+## Comments
+
+A comment must explain why, never what. If a comment restates the code, the
+name was wrong; fix the name and delete the comment.
+
+Delete on sight: scaffold comments shipped by tooling, section banners,
+file headers, narration of obvious code, commented-out code, JSDoc that
+repeats the signature.
+
+Keep only for non-obvious invariants, security reasoning, compatibility
+constraints, or runtime behaviour that cannot be expressed in code.
+
+## Patterns
+
+Patterns are vocabulary for recurring problems, not a checklist. Identify
+the force first: construction complexity, substitution, event fan-out,
+state transitions, provider variation. Then select the smallest pattern
+that solves it.
+
+- No factories when construction is trivial
+- No interfaces where no substitution boundary exists
+- No class hierarchies for stateless logic
+- Prefer composition and explicit parameters over DI containers
+- Future flexibility is not free; it creates present complexity
+
+## Verification
+
+Different tools own different concerns. Do not spend judgement on what
+automation already owns.
+
+Formatting to the formatter. Static hygiene to the linter. Type
+compatibility to the compiler. Unit behaviour to the test runner. User
+workflow to the e2e runner.
+
+Spend judgement on responsibility, coupling, boundaries, invariants, state
+ownership, abstractions and behavioural risk.
+
+A passing suite does not prove every behaviour. Evidence must apply to the
+mutation being made.
+
+## Before calling it done
+
+Answer without hand-waving:
+
+- What organising principle did I choose, and why does it match this
+  application?
+- Where does business logic live? Where does I/O happen?
+- What are the dependency rules?
+- Why is this an interface, or why is it not?
+- Why is this a function rather than a class?
+- Who owns this state?
+- Where are external SDKs isolated?
+- Where is input validated? Where does it fail closed?
+- Which invariants are encoded in types?
+- Which modules can be tested independently?
+- What did I deliberately not abstract because YAGNI?
+- What would I change next if requirements changed?
+- What verification proves I did not change behaviour?

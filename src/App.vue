@@ -1,9 +1,9 @@
 <script setup lang="ts">
-const title: string = 'ICRT'
+import IconGradientDefs from './components/icons/IconGradientDefs.vue'
+import DashboardView from './views/DashboardView.vue'
 </script>
 
 <template>
-  <main class="min-h-screen bg-white p-8">
-    <h1 class="text-3xl font-bold text-slate-900">{{ title }} Product Insights</h1>
-  </main>
+  <IconGradientDefs />
+  <DashboardView />
 </template>

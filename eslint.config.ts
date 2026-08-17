@@ -27,6 +27,14 @@ export default defineConfigWithVueTs(
     files: ['src/**/__tests__/*'],
   },
 
+  {
+    name: 'app/vue-component-names',
+    files: ['**/*.vue'],
+    rules: {
+      'vue/multi-word-component-names': ['error', { ignores: ['Avatar'] }],
+    },
+  },
+
   ...pluginOxlint.buildFromOxlintConfigFile('.oxlintrc.json'),
 
   skipFormatting,
