@@ -2,17 +2,17 @@
 
 A Vue 3 dashboard for exploring dishwasher test results at three subscription tiers.
 
-![Basic tier showing aggregate stats with the product comparison gated](docs/desktop-basic.png)
-
 _Basic: aggregate stats only, comparison gated._
 
-![Premium tier showing the interactive chart with export unavailable](docs/desktop-premium.png)
+![Basic tier showing aggregate stats with the product comparison gated](docs/desktop-basic.png)
 
 _Premium: interactive chart, export unavailable._
 
-![Enterprise tier showing the chart with active PDF export](docs/desktop-enterprise.png)
+![Premium tier showing the interactive chart with export unavailable](docs/desktop-premium.png)
 
 _Enterprise: chart and active PDF export._
+
+![Enterprise tier showing the chart with active PDF export](docs/desktop-enterprise.png)
 
 ## Table of contents
 
