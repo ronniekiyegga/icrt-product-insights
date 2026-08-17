@@ -1,10 +1,12 @@
 # 001 — Smooth bar dim on hover with time-based ease-out
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: 9aedf24
 - **Severity**: HIGH
 - **Category**: Easing & duration / Performance
 - **Estimated scope**: 2 files (~40 lines)
+
+Resolved by the Vue/CSS bar refactor. Opacity now uses a bounded CSS transition and no canvas redraw loop.
 
 ## Problem
 

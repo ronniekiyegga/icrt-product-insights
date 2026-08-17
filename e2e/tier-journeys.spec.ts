@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 
 async function selectTier(page: Page, tier: 'premium' | 'enterprise') {
   await page.getByRole('button', { name: /Viewing as basic, Alex Johnson/i }).click()
-  await page.getByRole('button', { name: tier, exact: true }).click()
+  await page.getByRole('menuitemradio', { name: tier, exact: true }).click()
 }
 
 test('Basic keeps product identifiers out of the DOM', async ({ page }) => {

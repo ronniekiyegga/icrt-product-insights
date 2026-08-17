@@ -62,7 +62,10 @@
   --opacity-divider: 0.2;
   --opacity-icon-muted: 0.5;
   --opacity-tier-badge-ring: 0.3;
+  --opacity-chart-bar-dim: 0.9;
   --duration-fade: 200ms;
+  --duration-gate-hover: 250ms;
+  --ease-color: cubic-bezier(0.25, 0.1, 0.25, 1);
 
   --z-tier-content: 1;
 
@@ -72,7 +75,12 @@
 
   --inset-chart-plot-left: 0px;
   --inset-chart-plot-right: 3.5rem;
-  --height-chart-plot-packed: calc(var(--height-chart-bar-mobile) * 3 + 8px);
+  --height-chart-track: 62px;
+  --spacing-chart-row: 10px;
+  --spacing-chart-bar-inset-left: 3px;
+  --spacing-chart-bar-inset-right: 20px;
+  --spacing-chart-bar-label-x: 12.9055px;
+  --height-chart-plot-packed: calc((var(--height-chart-track) + var(--spacing-chart-row)) * 3);
   --offset-chart-skeleton-y: calc((var(--height-chart) - var(--height-chart-plot-packed)) / 2);
 
   --background-image-gradient-base: linear-gradient(
@@ -100,11 +108,23 @@
     #013747 77.66%,
     #011d25 120.55%
   );
-  --background-image-gradient-export-hover: linear-gradient(
-    77deg,
-    #3a07f2 10.26%,
-    #0cd1cf 98.05%
+  --color-gate-button-sheen: #0a7a8c;
+  --background-image-gradient-gate-button: linear-gradient(
+    180deg,
+    #011d25 0%,
+    #012d3a 18%,
+    #023847 34%,
+    var(--color-gate-button-sheen) 50%,
+    #023847 66%,
+    #013747 82%,
+    #011d25 100%
   );
+  --background-image-gradient-icon: linear-gradient(
+    180deg,
+    var(--color-brand) 0%,
+    var(--color-brand-deep) 100%
+  );
+  --background-image-gradient-export-hover: linear-gradient(77deg, #3a07f2 10.26%, #0cd1cf 98.05%);
   --color-export-icon: #02556d;
   --color-export-icon-hover: #3a07f2;
   --background-image-gradient-chart-bar: linear-gradient(
@@ -181,30 +201,33 @@
   --text-gate-action--line-height: 1.667;
   --text-gate-action--font-weight: 600;
 
-  --text-gate-title-mobile: 11.687px;
-  --text-gate-title-mobile--line-height: 17.53px;
+  --text-gate-title-mobile: 14px;
+  --text-gate-title-mobile--line-height: 1.5;
   --text-gate-title-mobile--font-weight: 600;
 
-  --text-gate-body-mobile: 10.226px;
-  --text-gate-body-mobile--line-height: 17.53px;
+  --text-gate-body-mobile: 12px;
+  --text-gate-body-mobile--line-height: 1.67;
 
-  --text-gate-action-mobile: 8.765px;
-  --text-gate-action-mobile--line-height: 14.609px;
+  --text-gate-action-mobile: 12px;
+  --text-gate-action-mobile--line-height: 1.67;
   --text-gate-action-mobile--font-weight: 600;
 
-  --text-tooltip: 9px;
-  --text-tooltip--line-height: 1.87;
+  --text-tooltip: 12px;
+  --text-tooltip--line-height: 1.67;
   --text-tooltip--font-weight: 500;
 
-  --text-tooltip-sm: 8px;
-  --text-tooltip-sm--line-height: 1.95;
+  --text-tooltip-sm: 11px;
+  --text-tooltip-sm--line-height: 1.5;
   --text-tooltip-sm--font-weight: 500;
 
-  --text-tooltip-meta: 9.5px;
+  --text-tooltip-meta: 11px;
   --text-tooltip-meta--line-height: 1.67;
+
+  --text-chart-bar: 12px;
 
   --shadow-card: 0 18px 48px rgb(0 0 0 / 0.07);
   --shadow-button: 0 9px 9px -5px rgb(0 0 0 / 0.04), 0 23px 28px -5px rgb(0 0 0 / 0.08);
+  --shadow-chart-bar: 0 4px 12px rgb(0 59 76 / 0.22);
   --shadow-gate-lock:
     0 7.558px 7.558px -3.779px rgb(0 0 0 / 0.04), 0 18.896px 22.675px -3.779px rgb(0 0 0 / 0.08);
   --shadow-gate-frame: 4px 8px 32px 0 rgb(219 220 230 / 0.4);
@@ -241,6 +264,7 @@
   --spacing-gate-section-mobile: 8.765px;
   --spacing-gate-button-track-mobile: 2.914px;
   --radius-gate-button-track-mobile: 8.741px;
+  --radius-gate-button: 8px;
   --radius-gate-button-mobile: 5.827px;
   --spacing-gate-button-x-mobile: 31.355px;
   --spacing-gate-button-y-mobile: 8.741px;
@@ -259,8 +283,8 @@
   --size-tier-badge-dot: 6.5px;
   --spacing-tier-badge-ring: 1.5px;
 
-  --height-chart: 145px;
-  --height-chart-bar: 40px;
+  --height-chart: var(--height-chart-plot-packed);
+  --height-chart-bar: 46px;
   --height-chart-bar-mobile: 36px;
   --height-comparison-gate-plot: 252px;
   --height-tooltip: 75px;
@@ -288,9 +312,14 @@
   --spacing-tier-avatar-label: 12px;
   --spacing-tier-label-chevron: 8px;
   --spacing-tier-label-stack: 2px;
-  --spacing-chart-axis: 1rem;
+  --spacing-chart-axis: 2rem;
   --spacing-chart-axis-tablet: 4rem;
+  --spacing-chart-caption-gap: 1rem;
   --height-chart-axis-label: 1.25rem;
+  --height-chart-scale: calc(
+    var(--spacing-chart-axis) + var(--height-chart-axis-label) + var(--spacing-chart-caption-gap) +
+      (var(--text-annotation) * var(--text-annotation--line-height))
+  );
 
   --breakpoint-tablet: 768px;
   --breakpoint-desktop: 1200px;
@@ -299,12 +328,24 @@
 @custom-variant tablet-only (@media (width >= 768px) and (width < 1200px));
 @custom-variant mobile (@media (width < 768px));
 
+@media (width < 768px) {
+  :root {
+    --text-gate-title: var(--text-gate-title-mobile);
+    --text-gate-title--line-height: var(--text-gate-title-mobile--line-height);
+    --text-gate-body: var(--text-gate-body-mobile);
+    --text-gate-body--line-height: var(--text-gate-body-mobile--line-height);
+    --text-gate-action: var(--text-gate-action-mobile);
+    --text-gate-action--line-height: var(--text-gate-action-mobile--line-height);
+  }
+}
+
 @media (min-width: 768px) {
   :root {
-    --inset-chart-plot-left: 7.9375rem;
-    --inset-chart-plot-right: 2.5rem;
-    --height-chart-plot-packed: calc(var(--height-chart-bar) * 3 + 16px);
-    --height-comparison-gate-plot: 145px;
+    --inset-chart-plot-left: 0px;
+    --inset-chart-plot-right: 0px;
+    --height-chart-plot-packed: calc((var(--height-chart-track) + var(--spacing-chart-row)) * 3);
+    --height-comparison-gate-plot: var(--height-chart-plot-packed);
+    --spacing-chart-axis: var(--spacing-chart-axis-tablet);
   }
 }
 
@@ -340,6 +381,70 @@
     -webkit-mask: url('/ICRT.svg') center / contain no-repeat;
   }
 
+  .icon-gradient-green {
+    stroke: url(#icon-gradient-green);
+    color: var(--color-brand-deep);
+  }
+
+  .icon-gradient-green--fill {
+    fill: url(#icon-gradient-green);
+  }
+
+  .score-bar {
+    transition: opacity var(--duration-fade) ease;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .score-plot:hover .score-bar {
+      opacity: var(--opacity-chart-bar-dim);
+    }
+
+    .score-plot:hover li:hover .score-bar {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .score-bar {
+      transition: none;
+    }
+  }
+
+  .gate-action {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--radius-gate-button);
+    background-image: var(--background-image-gradient-gate-action);
+  }
+
+  .gate-action::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-image: var(--background-image-gradient-gate-button);
+    opacity: 0;
+    transition: opacity var(--duration-gate-hover) var(--ease-color);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .gate-action:hover::before {
+      opacity: 1;
+    }
+  }
+
+  .gate-action:focus-visible::before {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .gate-action::before {
+      transition: opacity var(--duration-fade) var(--ease-color);
+    }
+  }
+
   .tooltip-axis-anchor {
     bottom: calc(-1 * (var(--spacing-chart-axis) + var(--height-chart-axis-label)));
   }
@@ -348,6 +453,10 @@
     padding-top: var(--offset-chart-skeleton-y);
     padding-left: var(--inset-chart-plot-left);
     padding-right: var(--inset-chart-plot-right);
+  }
+
+  .score-comparison-chart {
+    margin-bottom: var(--height-chart-scale);
   }
 
   .comparison-gate-slot {
@@ -481,12 +590,6 @@
     width: 0.625rem;
     height: 0.3125rem;
     flex-shrink: 0;
-  }
-
-  @media (min-width: 768px) {
-    .tooltip-axis-anchor {
-      bottom: calc(-1 * (var(--spacing-chart-axis-tablet) + var(--height-chart-axis-label)));
-    }
   }
 
   .fade-enter-from,

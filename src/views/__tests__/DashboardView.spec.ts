@@ -24,4 +24,12 @@ describe('DashboardView', () => {
     expect(exportControl.props('visible')).toBe(false)
     expect(exportControl.props('enabled')).toBe(false)
   })
+
+  it('moves the simulation to Premium from the upgrade prompt', async () => {
+    const wrapper = mount(DashboardView)
+
+    await wrapper.get('.gate-action').trigger('click')
+
+    expect(wrapper.text()).toContain('Viewing as premium')
+  })
 })

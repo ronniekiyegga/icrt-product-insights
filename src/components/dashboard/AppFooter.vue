@@ -3,7 +3,8 @@ import { computed } from 'vue'
 import { testingData } from '../../data/testingData'
 
 const productCount = computed(
-  () => `${testingData.products.length} of ${testingData.aggregate_stats.total_tested} products shown`,
+  () =>
+    `${testingData.products.length} of ${testingData.aggregate_stats.total_tested} products shown`,
 )
 
 const footnote = computed(() => `${productCount.value} · Aggregates cover full category`)

@@ -7,7 +7,7 @@ describe('TierSwitcher', () => {
     const wrapper = mount(TierSwitcher, { props: { tier: 'basic' } })
 
     await wrapper.get('#tier-switcher').trigger('click')
-    await wrapper.get('[aria-selected="false"] button').trigger('click')
+    await wrapper.get('[role="menuitemradio"][aria-checked="false"]').trigger('click')
 
     expect(wrapper.emitted('update:tier')?.[0]).toEqual(['premium'])
   })
@@ -17,10 +17,31 @@ describe('TierSwitcher', () => {
 
     expect(wrapper.get('#tier-switcher').text()).toContain('basic')
     expect(wrapper.get('#tier-switcher').text()).toContain('Alex Johnson')
-    expect(wrapper.find('[role="listbox"]').exists()).toBe(false)
+    expect(wrapper.find('[role="menu"]').exists()).toBe(false)
 
     await wrapper.trigger('mouseenter')
 
-    expect(wrapper.find('[role="listbox"]').exists()).toBe(true)
+    expect(wrapper.find('[role="menu"]').exists()).toBe(true)
+  })
+
+  it('supports arrow-key navigation and Escape', async () => {
+    const wrapper = mount(TierSwitcher, { props: { tier: 'basic' }, attachTo: document.body })
+    const trigger = wrapper.get('#tier-switcher')
+
+    await trigger.trigger('keydown', { key: 'ArrowDown' })
+    await wrapper.vm.$nextTick()
+
+    const options = wrapper.findAll('[role="menuitemradio"]')
+    expect(options).toHaveLength(3)
+    expect(document.activeElement).toBe(options[0]?.element)
+
+    await options[0]?.trigger('keydown', { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(options[1]?.element)
+
+    await options[1]?.trigger('keydown', { key: 'Escape' })
+    expect(wrapper.find('[role="menu"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(trigger.element)
+
+    wrapper.unmount()
   })
 })

@@ -3,11 +3,12 @@ import { describe, expect, it } from 'vitest'
 import AccessGate from '../AccessGate.vue'
 
 describe('AccessGate', () => {
-  it('renders the gate copy', () => {
+  it('renders the gate copy and emits its action', async () => {
     const wrapper = mount(AccessGate, {
       props: {
         title: 'Product-level results',
-        description: 'Premium opens up the individual scores and testing times behind that average.',
+        description:
+          'Premium opens up the individual scores and testing times behind that average.',
         actionLabel: 'See Premium Plans',
       },
     })
@@ -17,5 +18,9 @@ describe('AccessGate', () => {
       'Premium opens up the individual scores and testing times behind that average.',
     )
     expect(wrapper.get('button').text()).toContain('See Premium Plans')
+
+    await wrapper.get('button').trigger('click')
+
+    expect(wrapper.emitted('action')).toEqual([[]])
   })
 })

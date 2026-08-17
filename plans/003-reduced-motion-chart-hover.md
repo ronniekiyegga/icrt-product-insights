@@ -1,10 +1,12 @@
 # 003 — Respect prefers-reduced-motion for chart hover motion
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: 9aedf24
 - **Severity**: MEDIUM
 - **Category**: Accessibility
 - **Estimated scope**: 1 file (~15 lines)
+
+Implemented for both CSS bar fading and JavaScript tooltip travel.
 
 ## Problem
 

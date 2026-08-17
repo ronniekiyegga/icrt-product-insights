@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ChartNoAxesColumn } from '@lucide/vue'
 import { computed, defineAsyncComponent, ref } from 'vue'
 import { resolveCapabilities } from '../entitlements/capabilities'
 import type { Tier } from '../entitlements/types'
@@ -11,6 +10,7 @@ import AppHeader from '../components/dashboard/AppHeader.vue'
 import ComparisonGate from '../components/dashboard/ComparisonGate.vue'
 import ReportExportButton from '../components/dashboard/ReportExportButton.vue'
 import SectionNav from '../components/dashboard/SectionNav.vue'
+import ScoreComparisonIcon from '../components/icons/ScoreComparisonIcon.vue'
 import { generateReport } from '../reports/generateReport'
 
 const ScoreComparison = defineAsyncComponent({
@@ -39,6 +39,10 @@ async function onExport() {
     exportError.value = result.reason
   }
 }
+
+function onUpgrade() {
+  tier.value = 'premium'
+}
 </script>
 
 <template>
@@ -65,12 +69,10 @@ async function onExport() {
             <SectionNav />
             <AggregateStats v-if="capabilities.viewAggregates" />
             <section class="flex flex-col gap-6 md:mx-3">
-              <h2 class="flex items-center gap-2 font-semibold leading-none text-tiny text-text-strong">
-                <ChartNoAxesColumn
-                  class="size-3 shrink-0 text-gradient-red-to"
-                  :stroke-width="2.5"
-                  aria-hidden="true"
-                />
+              <h2
+                class="flex items-center gap-2 font-semibold leading-none text-tiny text-text-strong"
+              >
+                <ScoreComparisonIcon />
                 Products Score Comparison
               </h2>
               <Transition name="fade" mode="out-in">
@@ -79,8 +81,10 @@ async function onExport() {
                   <div class="comparison-gate-plot blur-sm" aria-hidden="true">
                     <ChartSkeleton class="w-full opacity-placeholder" />
                   </div>
-                  <div class="comparison-gate-card flex w-full items-center justify-center px-1 mobile:py-8">
-                    <ComparisonGate />
+                  <div
+                    class="comparison-gate-card flex w-full items-center justify-center px-1 mobile:py-8"
+                  >
+                    <ComparisonGate @action="onUpgrade" />
                   </div>
                 </div>
               </Transition>

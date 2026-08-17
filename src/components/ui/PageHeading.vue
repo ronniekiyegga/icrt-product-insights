@@ -16,11 +16,7 @@ defineProps<{
     </div>
     <div
       class="shrink-0 justify-end tablet:min-h-export-action"
-      :class="
-        showExportAction
-          ? 'flex w-full tablet:w-auto'
-          : 'hidden tablet:flex tablet:w-auto'
-      "
+      :class="showExportAction ? 'flex w-full tablet:w-auto' : 'hidden tablet:flex tablet:w-auto'"
     >
       <slot />
     </div>

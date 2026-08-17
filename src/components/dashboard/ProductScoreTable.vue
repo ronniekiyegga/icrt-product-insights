@@ -12,9 +12,13 @@ function productLabel(product: Product): string {
   <table class="sr-only">
     <caption>
       Product scores,
-      {{ products.length }}
+      {{
+        products.length
+      }}
       of
-      {{ testingData.aggregate_stats.total_tested }}
+      {{
+        testingData.aggregate_stats.total_tested
+      }}
       tested
     </caption>
     <thead>

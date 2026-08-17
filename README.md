@@ -4,7 +4,7 @@ A Vue 3 dashboard for exploring dishwasher test results at three subscription ti
 
 ## Run locally
 
-Requires Node 22 and npm 11.5.2.
+Requires Node 22.22.2 or later and npm 11.5.2.
 
 ```sh
 npm ci
@@ -25,6 +25,7 @@ Open `http://localhost:8080`.
 ## Verification
 
 ```sh
+npm run format:check
 npm run lint:check
 npm run type-check
 npm run test:unit
@@ -36,15 +37,15 @@ npm run test:e2e -- --project=chromium
 ## Part A decisions
 
 - The supplied aggregates cover 15 products, while the payload contains three product records. The dashboard shows "3 of 15" and does not recalculate the aggregates from a different set.
-- The comparison uses horizontal bars. They use the wide layout well, make the category average easy to read as a vertical reference, and can extend downwards as more products are added. A bullet chart was considered, but it asks readers to learn a less familiar visual grammar.
+- The comparison uses horizontal bars. They use the wide layout well, keep product labels readable, and can extend downwards as more products are added. A bullet chart was considered, but it asks readers to learn a less familiar visual grammar.
 - Time to result is shown in the tooltip and accessible table, not as a second chart series. Score and time measure different things, and three records cannot support an implied correlation.
-- The average line is a small local Chart.js plugin. Adding a package for one dashed line was not justified.
+- Chart.js owns the scale, responsive layout, bar geometry and hit testing. Custom plugins draw the branded tracks and in-bar labels, while the external Vue tooltip keeps the presentation consistent with the rest of the interface.
 - Basic sees a blurred skeleton, not blurred product data. CSS blur is not an access control and no product identifier reaches the DOM.
 - Premium can focus the unavailable export button and read why it is unavailable. `aria-disabled` is advisory, so the click and keyboard handlers also refuse the action.
 - The chart is loaded only after the comparison capability is granted. PDF code is loaded only when an Enterprise user exports. The main path does not pay for either dependency up front.
 - There is no router, store, shared button abstraction or composable with one consumer. Those mechanisms do not solve a current problem in this single-page application.
 
-The tier control is a demonstration harness. In production, entitlements would come from the authenticated session and current subscription, not from a user-controlled menu. The static payload is imported because the brief requires frontend parsing. This means product values exist in the built JavaScript for this exercise. A production Basic response would omit them at the API boundary.
+The tier control is a demonstration harness. In production, entitlements would come from the authenticated session and current subscription, not from a user-controlled menu. The brief explicitly requires the static payload to be parsed in the frontend, so product values exist in the built JavaScript for this exercise. Part A therefore demonstrates gating UX, not secure data access. A production Basic API response would omit product-level fields at the server boundary.
 
 ## Part B
 
@@ -85,7 +86,7 @@ Feature gating answers whether a customer paid for a capability. RBAC and organi
 
 ### 3. Vetting AI-generated code
 
-1. **Authorisation placed in presentation code.** I look for tier checks scattered through components, missing tenant predicates, and data fetched before a visual gate. The committed rules require components to ask the central capability module, and CI should fail if a tier literal appears outside that module. API integration tests must prove a Basic token receives no product fields and cannot fetch a report by guessing its ID.
+1. **Authorisation placed in presentation code.** I look for tier checks scattered through components, missing tenant predicates, and data fetched before a visual gate. The committed rules require capability decisions to go through the central entitlement module. Tests prove the Basic view receives no product fields in the DOM. A production API test would also prove that a Basic token cannot fetch those fields or a report by guessing its ID.
 2. **Dependency and lockfile defects.** I look for stale or vulnerable packages, incompatible peers, unbounded versions and builds that only work with an existing `node_modules`. This repository exposed a peer conflict, an npm-major lockfile mismatch and an invalid hoisted `picomatch` version. `npm ci` runs with the pinned npm version in a clean CI environment on every change, followed by lint, type checks, tests, the production build and the Docker build.
 
 The constraints are committed in `.cursor/rules/icrt-dashboard.mdc` and `.cursor/rules/implementation-design.mdc`, so the checks applied to generated code are reviewable rather than claims made after the fact. If the dependency surface grew, I would add automated vulnerability scanning and a lockfile update policy.

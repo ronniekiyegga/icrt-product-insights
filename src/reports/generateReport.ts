@@ -1,8 +1,6 @@
 import { testingData } from '../data/testingData'
 
-export type ReportResult =
-  | { status: 'ok'; filename: string }
-  | { status: 'failed'; reason: string }
+export type ReportResult = { status: 'ok'; filename: string } | { status: 'failed'; reason: string }
 
 export async function generateReport(): Promise<ReportResult> {
   try {
@@ -42,7 +40,11 @@ export async function generateReport(): Promise<ReportResult> {
     }
 
     y += 7
-    doc.text(`${String(products.length)} of ${String(aggregate_stats.total_tested)} products shown`, 14, y)
+    doc.text(
+      `${String(products.length)} of ${String(aggregate_stats.total_tested)} products shown`,
+      14,
+      y,
+    )
 
     const filename = `${category.toLowerCase()}-product-report.pdf`
     doc.save(filename)

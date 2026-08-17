@@ -57,15 +57,15 @@ const emit = defineEmits<{
           </p>
         </div>
         <div class="h-px w-full shrink-0 bg-stroke-weak" role="presentation" />
-        <div class="flex w-full shrink-0 rounded-xl bg-background-inset p-1">
+        <div class="flex w-full shrink-0 rounded-xl bg-background-inset p-1 shadow-button">
           <button
             type="button"
-            class="inline-flex flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg bg-gradient-gate-action px-10 py-3 font-semibold text-gate-action text-text-inverse shadow-button"
+            class="gate-action inline-flex flex-1 cursor-pointer items-center justify-center gap-1 rounded-lg px-10 py-3 font-semibold text-gate-action text-text-inverse"
             @click="emit('action')"
           >
             {{ actionLabel }}
             <ArrowUpRight
-              class="size-gate-arrow shrink-0 text-text-inverse"
+              class="size-gate-arrow shrink-0 opacity-icon-muted"
               :stroke-width="2"
               aria-hidden="true"
             />

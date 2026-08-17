@@ -35,20 +35,23 @@ asynchronous and fallible operation is PDF generation.
 
 ```
 src/
-  data/testing-data.json          payload verbatim, never edited
-  entitlements/types.ts           Tier, Capabilities
-  entitlements/capabilities.ts    tier to capability map
-  dashboard/*.vue                 presentation only
-  reports/generateReport.ts       jsPDF isolated here
-  styles/tokens.css
+  components/dashboard/           dashboard presentation and interaction
+  components/ui/                  reusable presentation primitives
+  components/icons/               local icon components
+  data/testingData.ts              typed static payload
+  entitlements/                    tier types and capability policy
+  reports/generateReport.ts        jsPDF boundary
+  views/DashboardView.vue          page composition and state ownership
+  assets/main.css                  Tailwind theme and shared tokens
 ```
 
-Dependency rule: `dashboard/` may import from `entitlements/` and `reports/`.
-Neither may import from `dashboard/`. Presentation depends on domain. Domain
-depends on nothing.
+Dependency rule: `DashboardView` composes presentation and may call entitlement
+and report boundaries. Dashboard components may import the static data and the
+local score scale. Entitlements and reports never import presentation. Domain
+policy depends on types, not Vue.
 
-Colocate tests with the code they cover. `capabilities.spec.ts` sits beside
-`capabilities.ts`, not in a top-level test folder.
+Keep tests under the nearest `__tests__` folder for the code they cover, not in
+one top-level unit-test directory.
 
 ## The entitlement boundary
 
@@ -76,9 +79,9 @@ export function resolveCapabilities(tier: unknown): Capabilities {
 
 Rules:
 
-- Components ask capabilities, never tiers. `can.viewComparison`, never
-  `tier === 'premium'`. If a tier string literal appears outside
-  `capabilities.ts`, the boundary has leaked.
+- Capability decisions ask capabilities, never tiers. `can.viewComparison`,
+  never `tier === 'premium'`. The profile control may map tiers to visual
+  treatment, but it does not decide access.
 - `resolveCapabilities` fails closed. Unknown input returns Basic. It never
   throws and it never grants.
 - `Record<Tier, Capabilities>` is deliberate: adding a tier is a compile error
@@ -92,14 +95,16 @@ Rules:
   them from the `products` array. The two describe different sets: the
   aggregates cover 15 tested products, the array holds 3. Recomputing produces
   different numbers.
-- `ttr_days` is presentation-only here. Surface it in the chart tooltip and
-  nowhere else.
+- `ttr_days` is presentation-only here. Surface it in the chart tooltip,
+  accessible table and generated report.
 - Product ordering is presentational (descending by score for comparison
   legibility). Do not describe it as a ranking supplied by the source.
 
 ## Vendor isolation
 
-- Chart.js is imported in `ScoreComparison.vue` and nowhere else.
+- Chart.js is imported in `ScoreComparison.vue` and nowhere else. It owns the
+  scale, responsive layout, bar geometry and hit testing. Keep branded drawing
+  in its plugins and keep the external tooltip in Vue.
 - jsPDF is imported in `reports/generateReport.ts` and nowhere else.
 - `generateReport` returns a result, it does not throw:
   `{ status: 'ok' } | { status: 'failed'; reason: string }`.
@@ -157,8 +162,8 @@ Before committing: `grep -rn "^\s*//\|/\*" src/ e2e/ *.ts`
 
 ## Styling
 
-- Tokens in `styles/tokens.css` as CSS custom properties. Seven colour roles:
-  brand, text-strong, text-weak, stroke-strong, stroke-weak, fill, background.
+- Tokens live in `assets/main.css` as CSS custom properties grouped by text,
+  stroke, icon, background, brand, motion, size and spacing roles.
 - ICRT palette: navy `#003B4C` structural and chart bars, mint `#57E5C7`
   interactive elements and the reference line, pale mint `#EAFBF8` surfaces.
 - Tailwind theme extends with these tokens. Arbitrary bracket values such as
@@ -176,7 +181,7 @@ does it internally.
   Basic.
 - Component (Vue Test Utils): only components carrying behaviour. AccessGate
   copy, ReportExportButton refusing the action when ungated, TierSwitcher
-  emitting the change, ScoreComparison rendering or not rendering by capability.
+  keyboard selection, and DashboardView rendering by capability.
   Do not test components that only render a value.
 - E2E (Playwright): the three tier journeys, nothing else. The Basic spec must
   assert product identifiers are absent from the DOM. That assertion is the
@@ -194,7 +199,7 @@ Leave zero type, lint or unused-import diagnostics.
   Compose, no Redis, no Postgres, no second service.
 - CI: lint, typecheck, unit, build and docker build in one job; Playwright
   chromium in a second job. Cheap checks run first.
-- Node 22 in the Dockerfile, the CI workflow and `engines`. Keep all three
+- Node 22.22.2 in the Dockerfile, CI workflow, README and `engines`. Keep them
   aligned.
 
 ## Branching

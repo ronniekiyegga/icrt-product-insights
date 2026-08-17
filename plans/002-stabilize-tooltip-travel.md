@@ -1,10 +1,12 @@
 # 002 — Stabilize tooltip travel: lock X to bar score, shorten ease-out
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: 9aedf24
 - **Severity**: HIGH
 - **Category**: Easing & duration / Interruptibility
 - **Estimated scope**: 1 file (~35 lines)
+
+Implemented with 180ms endpoint-locked desktop travel and an immediate resting position on leave.
 
 ## Problem
 

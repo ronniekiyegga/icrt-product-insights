@@ -8,7 +8,7 @@ import { LayoutGrid } from '@lucide/vue'
       type="button"
       class="flex cursor-pointer items-center gap-1.5 border-b border-text-strong mx-1 px-1 py-1.5 font-medium text-annotation text-text-strong"
     >
-      <LayoutGrid class="size-3 fill-current" aria-hidden="true" />
+      <LayoutGrid class="size-3 icon-gradient-green icon-gradient-green--fill" aria-hidden="true" />
       Overview
     </button>
     <button

@@ -78,10 +78,6 @@ function barThickness(): number {
   return isTablet() ? chartTokens.barHeight : chartTokens.barHeightMobile
 }
 
-function barGap(): number {
-  return isTablet() ? 8 : 4
-}
-
 function barFill(context: ScriptableContext<'bar'>): CanvasGradient | string {
   const tokens = chartTokens
   if (tokens === undefined) {
@@ -347,14 +343,16 @@ function applyChartLayout() {
     dataset.barThickness = barThickness()
   }
 
-  const tablet = isTablet()
   const yScale = chart.options.scales?.y
   if (yScale !== undefined && typeof yScale === 'object') {
-    yScale.ticks = { ...yScale.ticks, display: tablet }
+    yScale.ticks = { ...yScale.ticks, display: false }
   }
   chart.options.layout = {
     ...chart.options.layout,
-    padding: { right: tablet ? 40 : 56 },
+    padding: {
+      left: chartTokens?.barInsetLeft ?? 3,
+      right: chartTokens?.barInsetRight ?? 20,
+    },
   }
   chart.update()
   if (isTablet()) {
@@ -376,11 +374,62 @@ const fadeUnhovered: Plugin<'bar'> = {
 
       ctx.save()
       ctx.globalAlpha = barOpacities[index] ?? 1
+      ctx.shadowColor = 'rgb(0 59 76 / 0.22)'
+      ctx.shadowBlur = 12
+      ctx.shadowOffsetY = 4
       element.draw(ctx)
       ctx.restore()
     }
 
     return false
+  },
+}
+
+function roundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  const safeRadius = Math.min(radius, height / 2, width / 2)
+  ctx.beginPath()
+  ctx.moveTo(x + safeRadius, y)
+  ctx.lineTo(x + width - safeRadius, y)
+  ctx.arcTo(x + width, y, x + width, y + safeRadius, safeRadius)
+  ctx.lineTo(x + width, y + height - safeRadius)
+  ctx.arcTo(x + width, y + height, x + width - safeRadius, y + height, safeRadius)
+  ctx.lineTo(x + safeRadius, y + height)
+  ctx.arcTo(x, y + height, x, y + height - safeRadius, safeRadius)
+  ctx.lineTo(x, y + safeRadius)
+  ctx.arcTo(x, y, x + safeRadius, y, safeRadius)
+  ctx.closePath()
+}
+
+const barTracks: Plugin<'bar'> = {
+  id: 'barTracks',
+  beforeDatasetsDraw(chartInstance) {
+    const tokens = chartTokens
+    if (tokens === undefined) {
+      return
+    }
+
+    const { ctx, width } = chartInstance
+    const meta = chartInstance.getDatasetMeta(0)
+    ctx.save()
+    ctx.fillStyle = tokens.trackFill
+    ctx.strokeStyle = tokens.trackStroke
+    ctx.lineWidth = 1
+
+    for (const element of meta.data) {
+      const height = tokens.trackHeight
+      roundedRect(ctx, 0.5, element.y - height / 2, width - 1, height, 32)
+      ctx.fill()
+      ctx.stroke()
+    }
+
+    ctx.restore()
   },
 }
 
@@ -394,26 +443,33 @@ const endLabels: Plugin<'bar'> = {
 
     const meta = chartInstance.getDatasetMeta(0)
     const { ctx } = chartInstance
-    const tablet = isTablet()
-    const size = tablet ? tokens.textTinySize : tokens.textAnnotationSize
-    const fill = tokens.textWeak
+    const size = tokens.textBarLabelSize
 
     ctx.save()
-    ctx.fillStyle = fill
-    ctx.font = `400 ${String(size)}px ${labelFontFamily}`
-    ctx.textAlign = 'left'
+    ctx.fillStyle = tokens.textInverse
+    ctx.font = `600 ${String(size)}px ${labelFontFamily}`
     ctx.textBaseline = 'middle'
 
     for (const [index, element] of meta.data.entries()) {
       const product = products[index]
-      if (product === undefined) {
+      if (product === undefined || !(element instanceof BarElement)) {
         continue
       }
 
-      const label = tablet ? String(product.score) : product.brand
+      const position = element.getProps(['base', 'x', 'y'], true)
+      if (
+        typeof position.base !== 'number' ||
+        typeof position.x !== 'number' ||
+        typeof position.y !== 'number'
+      ) {
+        continue
+      }
       ctx.save()
       ctx.globalAlpha = barOpacities[index] ?? 1
-      ctx.fillText(label, element.x + 8, element.y)
+      ctx.textAlign = 'left'
+      ctx.fillText(productLabel(product), position.base + tokens.barLabelPadding, position.y)
+      ctx.textAlign = 'right'
+      ctx.fillText(String(product.score), position.x - tokens.barLabelPadding, position.y)
       ctx.restore()
     }
 
@@ -449,14 +505,14 @@ onMounted(() => {
 
   chart = new Chart(el, {
     type: 'bar',
-    plugins: [fadeUnhovered, endLabels, syncScale],
+    plugins: [barTracks, fadeUnhovered, endLabels, syncScale],
     data: {
       labels: products.map(productLabel),
       datasets: [
         {
           data: products.map((product) => product.score),
           backgroundColor: barFill,
-          borderRadius: 8,
+          borderRadius: 32,
           borderSkipped: false,
           barThickness: barThickness(),
         },
@@ -471,7 +527,8 @@ onMounted(() => {
       clip: false,
       layout: {
         padding: {
-          right: isTablet() ? 40 : 56,
+          left: chartTokens.barInsetLeft,
+          right: chartTokens.barInsetRight,
         },
       },
       plugins: {
@@ -501,19 +558,13 @@ onMounted(() => {
             display: false,
           },
           ticks: {
-            display: isTablet(),
+            display: false,
             color: chartTokens.textWeak,
             padding: 12,
             font: {
               size: chartTokens.textAnnotationSize,
               family: labelFontFamily,
             },
-          },
-          afterFit(axis) {
-            const packed = products.length * (barThickness() + barGap())
-            const leftover = Math.max(0, axis.height - packed)
-            axis.paddingTop = 0
-            axis.paddingBottom = leftover
           },
         },
       },
@@ -538,9 +589,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="relative h-chart overflow-visible">
+  <div class="score-comparison-chart relative h-chart overflow-visible">
     <div ref="overlayRoot" class="relative size-full overflow-visible">
-      <div class="size-full border-l-6 border-background-card pl-4 tablet:pl-8">
+      <div class="size-full">
         <canvas
           ref="canvas"
           class="size-full tablet:cursor-pointer"
