@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { ChevronsUpDown } from '@lucide/vue'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { TIERS } from '../entitlements/capabilities'
 import type { Tier } from '../entitlements/types'
-import HoverWash from '../ui/HoverWash.vue'
-import IcrtMark from './IcrtMark.vue'
-import { TIER_GRADIENT } from './tierGradient'
+import Avatar from '../ui/Avatar.vue'
+import TierCaret from '../ui/TierCaret.vue'
+import { TIER_GRADIENT, TIER_MENU_DOT, TIER_MENU_DOT_RING } from './tierGradient'
 
 defineProps<{
   tier: Tier
@@ -17,9 +16,26 @@ const emit = defineEmits<{
 
 const open = ref(false)
 const root = ref<HTMLElement | null>(null)
+let closeTimer: ReturnType<typeof setTimeout> | undefined
 
-function toggle() {
-  open.value = !open.value
+function openMenu() {
+  if (closeTimer !== undefined) {
+    clearTimeout(closeTimer)
+    closeTimer = undefined
+  }
+
+  open.value = true
+}
+
+function scheduleClose() {
+  if (closeTimer !== undefined) {
+    clearTimeout(closeTimer)
+  }
+
+  closeTimer = setTimeout(() => {
+    open.value = false
+    closeTimer = undefined
+  }, 120)
 }
 
 function pick(next: Tier) {
@@ -27,11 +43,21 @@ function pick(next: Tier) {
   open.value = false
 }
 
+function toggleMenu() {
+  if (open.value) {
+    scheduleClose()
+    return
+  }
+
+  openMenu()
+}
+
 function onDocumentPointerDown(event: PointerEvent) {
   const target = event.target
   if (target instanceof Node && root.value?.contains(target)) {
     return
   }
+
   open.value = false
 }
 
@@ -47,51 +73,74 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (closeTimer !== undefined) {
+    clearTimeout(closeTimer)
+  }
   document.removeEventListener('pointerdown', onDocumentPointerDown)
   document.removeEventListener('keydown', onDocumentKeydown)
 })
 </script>
 
 <template>
-  <div ref="root" class="relative">
+  <div ref="root" class="relative shrink-0" @mouseenter="openMenu" @mouseleave="scheduleClose">
     <button
       id="tier-switcher"
       type="button"
-      class="inline-flex cursor-pointer items-center gap-2"
-      aria-label="Viewing as"
+      class="inline-flex cursor-pointer items-center gap-tier-avatar-label rounded-full py-0.5 pl-0.5"
+      :aria-label="`Viewing as ${tier}, Alex Johnson`"
       aria-haspopup="listbox"
       :aria-expanded="open"
-      @click="toggle"
+      @click="toggleMenu"
     >
-      <span class="rounded-full bg-background-base p-0.5 shadow-button" aria-hidden="true">
-        <span class="block size-2 rounded-full" :class="TIER_GRADIENT[tier]" />
+      <span class="relative shrink-0">
+        <Avatar src="/avatar.jpg" alt="" initials="JD" />
+        <span class="tier-badge absolute right-0 bottom-0 z-20" aria-hidden="true">
+          <span class="tier-badge-dot" :class="TIER_GRADIENT[tier]" />
+        </span>
       </span>
-      <span class="font-normal text-annotation capitalize text-text-strong">{{ tier }}</span>
-      <ChevronsUpDown class="size-4 text-icon-neutral" aria-hidden="true" />
+      <span class="flex flex-col gap-tier-label-stack text-left">
+        <span class="font-normal text-annotation capitalize text-text-tier-menu">{{ tier }}</span>
+        <span class="inline-flex items-center gap-tier-label-chevron">
+          <span class="font-semibold text-tiny text-text-navy">Alex Johnson</span>
+          <TierCaret />
+        </span>
+      </span>
     </button>
-    <ul
-      v-if="open"
-      class="absolute top-full right-0 z-20 mt-2 flex w-44 flex-col rounded-xl bg-background-base py-2 shadow-card"
-      role="listbox"
-      aria-labelledby="tier-switcher"
-    >
-      <li
-        v-for="option in TIERS"
-        :key="option"
-        role="option"
-        :aria-selected="option === tier"
-        class="mx-3 border-b border-stroke-weak last:border-b-0"
+    <div v-if="open" class="tier-switcher-menu">
+      <ul
+        class="tier-switcher-menu-panel shadow-tier-menu"
+        role="listbox"
+        aria-labelledby="tier-switcher"
+        @mouseenter="openMenu"
       >
-        <button
-          type="button"
-          class="group relative flex w-full cursor-pointer items-center gap-2 overflow-hidden py-2 pr-3 pl-1"
-          @click="pick(option)"
+        <li
+          v-for="(option, index) in TIERS"
+          :key="option"
+          role="option"
+          :aria-selected="option === tier"
+          class="tier-switcher-menu-item"
         >
-          <HoverWash />
-          <IcrtMark class="relative size-3" :class="TIER_GRADIENT[option]" />
-          <span class="relative font-normal text-annotation capitalize text-text-strong">{{ option }}</span>
-        </button>
-      </li>
-    </ul>
+          <div class="tier-switcher-menu-item-shell">
+            <div class="group/tier-item tier-switcher-menu-item-block">
+              <span
+                class="pointer-events-none absolute inset-0 bg-gradient-menu-hover opacity-0 transition-opacity group-hover/tier-item:opacity-100 group-focus-within/tier-item:opacity-100"
+                aria-hidden="true"
+              />
+              <button type="button" class="tier-switcher-menu-button" @click="pick(option)">
+                <span
+                  class="tier-badge relative z-[1]"
+                  :class="TIER_MENU_DOT_RING[option]"
+                  aria-hidden="true"
+                >
+                  <span class="tier-badge-dot" :class="TIER_MENU_DOT[option]" />
+                </span>
+                <span class="relative z-[1] capitalize">{{ option }}</span>
+              </button>
+            </div>
+            <hr v-if="index < TIERS.length - 1" class="tier-switcher-menu-divider" />
+          </div>
+        </li>
+      </ul>
+    </div>
   </div>
 </template>

@@ -33,7 +33,7 @@ const aggregateCards = computed(() => {
 </script>
 
 <template>
-  <div class="grid grid-cols-1 gap-2 px-1 tablet:grid-cols-3">
+  <div class="mb-6 grid grid-cols-1 gap-2 px-1 tablet:grid-cols-3 md:mb-8">
     <StatCard v-for="card in aggregateCards" :key="card.category" v-bind="card">
       <template #icon>
         <IcrtMark class="size-3 bg-brand-deep" />

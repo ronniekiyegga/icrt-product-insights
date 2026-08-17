@@ -108,11 +108,11 @@ Rules:
 
 ## Access gates
 
-Two gated capabilities, one shared component.
+Two gated capabilities.
 
-- Comparison gate (Basic): render `AccessGate` over an EMPTY plot area. Do not
-  render the real chart and blur or overlay it. CSS is not an access control,
-  and product data must not reach the DOM for a tier that cannot view it.
+- Comparison gate (Basic): render `AccessGate` over an empty plot placeholder. Do not
+  render the real chart. CSS is not an access control, and product data must not
+  reach the DOM for a tier that cannot view it.
 - Export gate (Premium): a real `<button>` with `aria-disabled="true"`, NOT the
   native `disabled` attribute. It stays keyboard focusable and announces its
   state. `aria-disabled` is advisory only, so the click and keydown handlers
@@ -175,9 +175,9 @@ does it internally.
 - Unit: `resolveCapabilities`. Each tier maps correctly, unknown input returns
   Basic.
 - Component (Vue Test Utils): only components carrying behaviour. AccessGate
-  visibility, ReportExportButton refusing the action when ungated,
-  TierSwitcher emitting the change, ScoreComparison rendering or not rendering
-  by capability. Do not test components that only render a value.
+  copy, ReportExportButton refusing the action when ungated, TierSwitcher
+  emitting the change, ScoreComparison rendering or not rendering by capability.
+  Do not test components that only render a value.
 - E2E (Playwright): the three tier journeys, nothing else. The Basic spec must
   assert product identifiers are absent from the DOM. That assertion is the
   executable form of the Part B security claim.

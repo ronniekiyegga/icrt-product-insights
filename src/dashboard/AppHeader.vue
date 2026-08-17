@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { Tier } from '../entitlements/types'
-import Avatar from '../ui/Avatar.vue'
 import TierSwitcher from './TierSwitcher.vue'
 
 defineProps<{
@@ -13,7 +12,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <header class="w-full bg-background-base mb-8 tablet:mb-12">
+  <header class="relative z-30 w-full bg-background-base mb-4 tablet:mb-4">
     <div class="page flex items-center justify-between border-b border-stroke-weak py-4">
       <div class="flex items-center gap-2">
         <div class="flex items-center gap-1">
@@ -28,16 +27,7 @@ const emit = defineEmits<{
         <span class="hidden h-6 w-px bg-stroke-weak tablet:block" aria-hidden="true" />
         <span class="font-normal text-annotation text-text-weak">Research Platform</span>
       </div>
-      <div class="group/account flex items-center gap-3">
-        <span class="relative inline-flex rounded-full">
-          <span
-            class="pointer-events-none absolute -inset-px rounded-full bg-gradient-hover opacity-0 transition-opacity group-hover/account:opacity-50 group-focus-within/account:opacity-50"
-            aria-hidden="true"
-          />
-          <Avatar src="/avatar.jpg" alt="John Doe" initials="JD" />
-        </span>
-        <TierSwitcher :tier="tier" @update:tier="emit('update:tier', $event)" />
-      </div>
+      <TierSwitcher :tier="tier" @update:tier="emit('update:tier', $event)" />
     </div>
   </header>
 </template>

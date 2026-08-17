@@ -3,7 +3,7 @@ import { LayoutGrid } from '@lucide/vue'
 </script>
 
 <template>
-  <nav class="flex items-center gap-4 mb-2" aria-label="Section">
+  <nav class="flex items-center gap-4" aria-label="Section">
     <button
       type="button"
       class="flex cursor-pointer items-center gap-1.5 border-b border-text-strong mx-1 px-1 py-1.5 font-medium text-annotation text-text-strong"
