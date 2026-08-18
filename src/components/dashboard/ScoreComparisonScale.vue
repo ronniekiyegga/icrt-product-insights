@@ -10,7 +10,7 @@ const scaleTicks = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 <template>
   <div class="absolute inset-x-0 top-full flex flex-col gap-chart-caption-gap pt-chart-axis">
     <div
-      class="flex justify-between text-annotation text-stroke-strong tablet:text-tiny"
+      class="flex justify-between text-annotation text-text-weak tablet:text-tiny"
       :style="{
         paddingLeft: `${String(insetLeft)}px`,
         paddingRight: `${String(insetRight)}px`,

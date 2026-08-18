@@ -3,7 +3,7 @@
 @theme {
   --color-text-strong: #000626e6;
   --color-text-weak: #000933a6;
-  --color-text-faint: #a4a9b3;
+  --color-text-faint: #69707e;
   --color-text-placeholder: rgb(0 9 51 / 0.22);
   --color-text-navy: #000933;
   --color-text-ink: #111010;
@@ -16,11 +16,11 @@
   --color-text-information: #1a74a8;
   --color-text-inverse: #ffffff;
 
-  --color-stroke-strong: #000d4d73;
+  --color-stroke-strong: #000d4d93;
   --color-stroke-weak: #0011661a;
   --color-stroke-tooltip: #fbfbfb;
   --color-stroke-selected: #0eb8a0;
-  --color-stroke-focus: #0eb8a0;
+  --color-stroke-focus: #003b4c;
   --color-stroke-disabled: #0011661a;
   --color-stroke-brand-strong: #0eb8a0;
   --color-stroke-brand-weak: #0eb8a033;
@@ -65,7 +65,10 @@
   --opacity-chart-bar-dim: 0.9;
   --duration-fade: 200ms;
   --duration-gate-hover: 250ms;
+  --duration-tooltip-enter: 150ms;
+  --duration-tooltip-leave: 90ms;
   --ease-color: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-tooltip-enter: cubic-bezier(0.23, 1, 0.32, 1);
 
   --z-tier-content: 1;
 
@@ -227,7 +230,21 @@
 
   --shadow-card: 0 18px 48px rgb(0 0 0 / 0.07);
   --shadow-button: 0 9px 9px -5px rgb(0 0 0 / 0.04), 0 23px 28px -5px rgb(0 0 0 / 0.08);
-  --shadow-chart-bar: 0 4px 12px rgb(0 59 76 / 0.22);
+  --color-chart-bar-shadow-1: rgb(0 0 0 / 0.1);
+  --blur-chart-bar-shadow-1: 11px;
+  --offset-y-chart-bar-shadow-1: 5px;
+  --color-chart-bar-shadow-2: rgb(0 0 0 / 0.09);
+  --blur-chart-bar-shadow-2: 19px;
+  --offset-y-chart-bar-shadow-2: 19px;
+  --color-chart-bar-shadow-3: rgb(0 0 0 / 0.05);
+  --blur-chart-bar-shadow-3: 26px;
+  --offset-y-chart-bar-shadow-3: 43px;
+  --color-chart-bar-shadow-4: rgb(0 0 0 / 0.01);
+  --blur-chart-bar-shadow-4: 31px;
+  --offset-y-chart-bar-shadow-4: 77px;
+  --color-chart-bar-shadow-5: rgb(0 0 0 / 0);
+  --blur-chart-bar-shadow-5: 34px;
+  --offset-y-chart-bar-shadow-5: 120px;
   --shadow-gate-lock:
     0 7.558px 7.558px -3.779px rgb(0 0 0 / 0.04), 0 18.896px 22.675px -3.779px rgb(0 0 0 / 0.08);
   --shadow-gate-frame: 4px 8px 32px 0 rgb(219 220 230 / 0.4);
@@ -447,6 +464,26 @@
 
   .tooltip-axis-anchor {
     bottom: calc(-1 * (var(--spacing-chart-axis) + var(--height-chart-axis-label)));
+  }
+
+  .score-tooltip-enter-active {
+    transition: opacity var(--duration-tooltip-enter) var(--ease-tooltip-enter);
+  }
+
+  .score-tooltip-leave-active {
+    transition: opacity var(--duration-tooltip-leave) var(--ease-tooltip-enter);
+  }
+
+  .score-tooltip-enter-from,
+  .score-tooltip-leave-to {
+    opacity: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .score-tooltip-enter-active,
+    .score-tooltip-leave-active {
+      transition: none;
+    }
   }
 
   .chart-plot-inset {

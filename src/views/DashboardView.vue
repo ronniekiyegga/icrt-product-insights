@@ -19,8 +19,15 @@ const ScoreComparison = defineAsyncComponent({
   delay: 0,
 })
 
+const TIER_ANNOUNCEMENTS: Record<Tier, string> = {
+  basic: 'Viewing as Basic. Category averages only. Product comparison requires Premium.',
+  premium: 'Viewing as Premium. Product comparison available. Report export requires Enterprise.',
+  enterprise: 'Viewing as Enterprise. Product comparison and report export available.',
+}
+
 const tier = ref<Tier>('basic')
 const capabilities = computed(() => resolveCapabilities(tier.value))
+const tierAnnouncement = computed(() => TIER_ANNOUNCEMENTS[tier.value])
 const exportPending = ref(false)
 const exportError = ref('')
 
@@ -49,7 +56,7 @@ function onUpgrade() {
   <div class="flex min-h-screen flex-col bg-background-base">
     <AppHeader v-model:tier="tier" />
     <main class="flex-1">
-      <p aria-live="polite" class="sr-only">Viewing as {{ tier }}</p>
+      <p aria-live="polite" class="sr-only">{{ tierAnnouncement }}</p>
       <div class="page pt-8 pb-8 tablet:pt-12 desktop:pt-10">
         <div class="flex flex-col gap-6 tablet:gap-10 desktop:gap-8">
           <PageHeading
