@@ -9,7 +9,7 @@ function productLabel(product: Product): string {
 </script>
 
 <template>
-  <table class="sr-only">
+  <table id="product-score-table" class="sr-only">
     <caption>
       Product scores,
       {{

@@ -1,13 +1,5 @@
 <script setup lang="ts">
-import {
-  BarController,
-  BarElement,
-  CategoryScale,
-  Chart,
-  LinearScale,
-  type Plugin,
-  type ScriptableContext,
-} from 'chart.js'
+import { BarController, BarElement, CategoryScale, Chart, LinearScale, type Plugin } from 'chart.js'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { testingData, type Product } from '../../data/testingData'
 import { readChartTokens, type ChartTokens } from './chartTokens'
@@ -26,26 +18,15 @@ let labelFontFamily = ''
 let reducedMotion = false
 
 const products = testingData.products.slice().sort((left, right) => right.score - left.score)
-const restingTooltipIndex = products.reduce((closest, product, index) => {
-  const avgScore = testingData.aggregate_stats.avg_score
-  const closestProduct = products[closest]
-  if (closestProduct === undefined) {
-    return index
-  }
-
-  return Math.abs(product.score - avgScore) < Math.abs(closestProduct.score - avgScore)
-    ? index
-    : closest
-}, 0)
-const restingProduct = products[restingTooltipIndex]
+const initialProduct = products[0]
 
 const scaleInset = ref({ left: 0, right: 0 })
 const tooltipState = ref({
-  visible: true,
-  brand: restingProduct?.brand ?? '',
-  model: restingProduct?.model ?? '',
-  score: restingProduct?.score ?? 0,
-  ttrDays: restingProduct?.ttr_days ?? 0,
+  visible: false,
+  brand: initialProduct?.brand ?? '',
+  model: initialProduct?.model ?? '',
+  score: initialProduct?.score ?? 0,
+  ttrDays: initialProduct?.ttr_days ?? 0,
 })
 const tooltipX = ref(0)
 let tooltipTargetX = 0
@@ -78,40 +59,50 @@ function barThickness(): number {
   return isTablet() ? chartTokens.barHeight : chartTokens.barHeightMobile
 }
 
-function barFill(context: ScriptableContext<'bar'>): CanvasGradient | string {
+function barFill(ctx: CanvasRenderingContext2D, element: BarElement): CanvasGradient | undefined {
   const tokens = chartTokens
   if (tokens === undefined) {
-    return ''
+    console.error('[ScoreComparison] Cannot construct bar gradient: chart tokens are unavailable.')
+    return undefined
   }
 
-  const from = tokens.barGradientFrom
-  const mid = tokens.barGradientMid
-  const to = tokens.barGradientTo
-  if (from === '') {
-    return from
+  if (
+    tokens.barGradientFrom === '' ||
+    tokens.barGradientMid === '' ||
+    tokens.barGradientTo === ''
+  ) {
+    console.error(
+      '[ScoreComparison] Cannot construct bar gradient: one or more colour tokens are empty.',
+    )
+    return undefined
+  }
+
+  const { y, height } = element.getProps(['y', 'height'], true)
+  if (
+    typeof y !== 'number' ||
+    !Number.isFinite(y) ||
+    typeof height !== 'number' ||
+    !Number.isFinite(height) ||
+    height <= 0
+  ) {
+    console.error(
+      `[ScoreComparison] Cannot construct bar gradient: invalid geometry y=${String(y)}, height=${String(height)}.`,
+    )
+    return undefined
   }
 
   try {
-    const { ctx } = context.chart
-    const element = context.chart.getDatasetMeta(context.datasetIndex).data[context.dataIndex]
-    if (element === undefined) {
-      return from
-    }
-
-    const props = element.getProps(['y', 'height'], true)
-    const y = props.y
-    const height = Number.isFinite(props.height) && props.height > 0 ? props.height : barThickness()
-    if (!Number.isFinite(y) || height <= 0) {
-      return from
-    }
-
     const gradient = ctx.createLinearGradient(0, y - height / 2, 0, y + height / 2)
-    gradient.addColorStop(0, from)
-    gradient.addColorStop(0.48, mid === '' ? from : mid)
-    gradient.addColorStop(1, to === '' ? from : to)
+    gradient.addColorStop(0, tokens.barGradientFrom)
+    gradient.addColorStop(0.5, tokens.barGradientMid)
+    gradient.addColorStop(1, tokens.barGradientTo)
     return gradient
-  } catch {
-    return from
+  } catch (error) {
+    console.error(
+      '[ScoreComparison] Cannot construct bar gradient: canvas gradient creation failed.',
+      error,
+    )
+    return undefined
   }
 }
 
@@ -221,7 +212,8 @@ function showProductTooltip(index: number, x: number, immediate = false) {
     return
   }
 
-  if (tooltipIndex !== index || !tooltipState.value.visible) {
+  const wasVisible = tooltipState.value.visible
+  if (tooltipIndex !== index || !wasVisible) {
     tooltipIndex = index
     tooltipState.value = {
       visible: true,
@@ -231,22 +223,10 @@ function showProductTooltip(index: number, x: number, immediate = false) {
       ttrDays: product.ttr_days,
     }
   }
-  moveTooltipTo(x, immediate)
-}
-
-function placeTooltipOnBar(index: number, immediate = false) {
-  if (chart === undefined || canvas.value === null || overlayRoot.value === null) {
-    return
+  moveTooltipTo(x, immediate || !wasVisible)
+  if (!wasVisible) {
+    tooltipPhase = 'track'
   }
-
-  const element = chart.getDatasetMeta(0).data[index]
-  if (element === undefined) {
-    return
-  }
-
-  const canvasBox = canvas.value.getBoundingClientRect()
-  const overlayBox = overlayRoot.value.getBoundingClientRect()
-  showProductTooltip(index, element.x + (canvasBox.left - overlayBox.left), immediate)
 }
 
 function setHoveredBar(index: number | null) {
@@ -294,12 +274,6 @@ function onCanvasMove(event: MouseEvent) {
 
 function onCanvasLeave() {
   setHoveredBar(null)
-  if (isTablet()) {
-    placeTooltipOnBar(restingTooltipIndex)
-    easeTooltipTo(tooltipTargetX, 'leave')
-    return
-  }
-
   hideTooltip()
 }
 
@@ -355,11 +329,6 @@ function applyChartLayout() {
     },
   }
   chart.update()
-  if (isTablet()) {
-    placeTooltipOnBar(restingTooltipIndex, true)
-    return
-  }
-
   hideTooltip()
 }
 
@@ -372,13 +341,30 @@ const fadeUnhovered: Plugin<'bar'> = {
         continue
       }
 
+      const gradient = barFill(ctx, element)
+      if (gradient === undefined) {
+        continue
+      }
+
+      const originalOptions = element.options
+      element.options = { ...originalOptions, backgroundColor: gradient }
+
+      for (const shadow of chartTokens?.barShadows ?? []) {
+        ctx.save()
+        ctx.globalAlpha = barOpacities[index] ?? 1
+        ctx.shadowColor = shadow.color
+        ctx.shadowBlur = shadow.blur
+        ctx.shadowOffsetX = 0
+        ctx.shadowOffsetY = shadow.offsetY
+        element.draw(ctx)
+        ctx.restore()
+      }
+
       ctx.save()
       ctx.globalAlpha = barOpacities[index] ?? 1
-      ctx.shadowColor = 'rgb(0 59 76 / 0.22)'
-      ctx.shadowBlur = 12
-      ctx.shadowOffsetY = 4
       element.draw(ctx)
       ctx.restore()
+      element.options = originalOptions
     }
 
     return false
@@ -511,7 +497,7 @@ onMounted(() => {
       datasets: [
         {
           data: products.map((product) => product.score),
-          backgroundColor: barFill,
+          backgroundColor: 'transparent',
           borderRadius: 32,
           borderSkipped: false,
           barThickness: barThickness(),
@@ -571,11 +557,6 @@ onMounted(() => {
     },
   })
 
-  if (isTablet()) {
-    placeTooltipOnBar(restingTooltipIndex, true)
-    return
-  }
-
   hideTooltip()
 })
 
@@ -597,6 +578,7 @@ onBeforeUnmount(() => {
           class="size-full tablet:cursor-pointer"
           role="img"
           aria-label="Horizontal bar chart comparing product scores"
+          aria-describedby="product-score-table"
           @mousemove="onCanvasMove"
           @mouseleave="onCanvasLeave"
           @touchstart.prevent="onCanvasTouch"

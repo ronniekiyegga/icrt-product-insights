@@ -15,7 +15,7 @@ defineProps<{
     class="flex min-w-0 flex-col gap-3 rounded-xl bg-background-card px-1 pt-4 pb-0.5 tablet-only:h-full"
   >
     <header class="flex shrink-0 items-center justify-between px-5">
-      <span class="font-normal text-annotation text-stroke-strong tablet-only:text-tooltip-sm">{{
+      <span class="font-normal text-annotation text-text-weak tablet-only:text-tooltip-sm">{{
         category
       }}</span>
       <Info class="size-4 shrink-0 text-icon-neutral" aria-hidden="true" />

@@ -30,6 +30,8 @@ describe('DashboardView', () => {
 
     await wrapper.get('.gate-action').trigger('click')
 
-    expect(wrapper.text()).toContain('Viewing as premium')
+    expect(wrapper.text()).toContain(
+      'Viewing as Premium. Product comparison available. Report export requires Enterprise.',
+    )
   })
 })

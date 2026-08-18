@@ -141,6 +141,7 @@ Install Chromium once before running the Playwright script: `npx playwright inst
 - The comparison uses horizontal bars. They use the wide layout well, keep product labels readable, and can extend downwards as more products are added. A bullet chart was considered, but it asks readers to learn a less familiar visual grammar.
 - Time to result is shown in the tooltip and accessible table, not as a second chart series. Score and time measure different things, and three records cannot support an implied correlation.
 - Chart.js owns the scale, responsive layout, bar geometry and hit testing. Custom plugins draw the branded tracks and in-bar labels, while the external Vue tooltip keeps the presentation consistent with the rest of the interface.
+- A custom plugin draws the category average at 82.4 as a vertical reference line, so the question the chart answers is which of these products beats the category rather than only how they rank against each other. It was written as a plugin rather than installing chartjs-plugin-annotation, since the component already had a plugin pipeline and a dependency for one dashed line was not justified.
 - Basic sees a blurred skeleton, not blurred product data. CSS blur is not an access control and no product identifier reaches the DOM.
 - Premium can focus the unavailable export button and read why it is unavailable. `aria-disabled` is advisory, so the click and keyboard handlers also refuse the action.
 - The chart is loaded only after the comparison capability is granted. PDF code is loaded only when an Enterprise user exports. The main path does not pay for either dependency up front.
@@ -152,6 +153,18 @@ The tier control is a demonstration harness. In production, entitlements would c
 
 ### 1. Database schema
 
+![Entity relationship diagram for the ICRT schema](docs/erd.png)
+
+Blue: accounts and entitlements. Green: the shared test corpus.
+Purple: observability. Entitlement decides which fields the API
+returns, not which rows exist, which is why no corpus table carries
+`organisation_id`.
+
+The diagram shows relationships. Constraints, defaults and indexes
+are below, since they carry the decisions the shape does not: which
+deletes cascade, which results are superseded rather than removed,
+and which reads the indexes actually serve.
+
 One PostgreSQL database.
 
 The data is relational and it has to stay consistent. An evaluation belongs to a product, a product to a category, an entitlement to a subscription. "Which products has this organisation paid to see" is a join. Deleting a product has to remove its evaluations, metrics and reports in the same transaction, or the corpus is left half deleted. ICRT's whole product is that its published results are citable, so two members reading different versions of the same evaluation is worse than a slow query.
@@ -160,7 +173,8 @@ The data is relational and it has to stay consistent. An evaluation belongs to a
 organisations       id PK, name, country, created_at
 users               id PK, organisation_id FK, email UNIQUE, role
 plans               id PK, code UNIQUE, name
-plan_features       (plan_id FK, feature_code) composite PK, enabled
+plan_features       (plan_id FK, feature_code) composite PK, enabled,
+                    limit_value
 subscriptions       id PK, organisation_id FK, plan_id FK, status,
                     starts_at, ends_at
 
@@ -170,7 +184,8 @@ products            id PK, category_id FK, brand, model
 laboratories        id PK, name, accreditation_code UNIQUE
 evaluations         id PK, product_id FK, laboratory_id FK,
                     protocol_version, sample_received_at,
-                    published_at, composite_score
+                    published_at, withdrawn_at,
+                    supersedes_evaluation_id FK, composite_score
 metric_definitions  id PK, category_id FK, code, label, unit,
                     scale_min, scale_max, weight,
                     contributes_to_score
@@ -181,7 +196,35 @@ reports             id PK, evaluation_id FK, download_id UNIQUE,
                     storage_key UNIQUE, created_at
 events              id PK, organisation_id FK, user_id FK,
                     occurred_at, event_type, properties jsonb
+audit_log           id PK, occurred_at, organisation_id FK,
+                    user_id FK, action, outcome, subject_type,
+                    subject_id, request_ip, detail jsonb
 ```
+
+Plans resolve to a set of feature codes rather than an ordered rank.
+Nothing in the schema assumes tiers are sequential, so an account can
+move directly from Basic to Enterprise, and ICRT can create a plan
+whose capabilities do not sit neatly above or below an existing one.
+If an upgrade path ever needed enforcing, that belongs in the billing
+flow rather than the data model, so pricing changes do not require a
+migration.
+
+The brief specifies users and subscription tiers but not who holds
+the subscription. I have assumed a tier is bought by an organisation
+and used by several of its people, since Enterprise implies seats and
+ICRT's own subscribers are member consumer bodies rather than
+individuals. A Basic account is simply an organisation with one
+person in it, so upgrading changes which plan the subscription points
+at rather than creating anything new. If a tier is per person
+instead, organisations is removed and subscriptions.organisation_id
+becomes user_id, and nothing else in the schema changes.
+
+Worth being explicit about what is and is not shared. The test corpus
+is not tenant isolated: every subscriber reads the same products,
+evaluations and metrics, and what varies is which fields the API
+returns. Accounts are isolated: users, subscriptions and events all
+scope to an organisation. That is why there is no organisation_id on
+products or evaluations.
 
 Metrics are rows, not columns. A published score is a composite, not a measurement. It is made of weighted sub-measurements, and comparative testing also captures attributes that are useful to the reader but deliberately do not feed the overall score. That is what weight and contributes_to_score are for. Storing criteria as rows means dishwashers and cameras carry different test criteria without a migration per category.
 
@@ -191,34 +234,48 @@ ttr_days is derived, not stored. It is published_at - sample_received_at. Storin
 
 Entitlements are data. plan_features means changing what a tier includes is a row update, not a deploy. It is the same shape as the frontend capability map: a plan resolves to a set of feature codes. Effective entitlements are the sum of the active plan, any inherited base plan, add-ons and trials, most generous wins.
 
-Indexes. I would not guess at these. You find the slow queries first, then index what those queries filter and sort on. Most tables end up with three to five. Adding them speculatively costs write throughput and gives you nothing back.
-
-Some are derivable from the schema before any traffic exists, because Postgres does not index foreign keys automatically and these are joined on every request: products(category_id), test_metrics(evaluation_id), users(organisation_id), reports(download_id).
-
-Two composites, because of how the queries are actually shaped. Nobody asks what was published most recently across the whole corpus. They ask for the latest evaluation for a product:
+Indexes. The columns I would index are users.organisation_id, products.category_id, test_metrics.evaluation_id, evaluations.laboratory_id, a composite on evaluations (product_id, published_at DESC), and a partial on subscriptions (organisation_id) where the status is active, plus two on the observability tables.
 
 ```sql
-CREATE INDEX ON evaluations (product_id, published_at DESC);
-CREATE INDEX ON evaluations (category_id, published_at DESC);
+CREATE INDEX ON users (organisation_id);
+CREATE INDEX ON products (category_id);
+CREATE INDEX ON test_metrics (evaluation_id);
+CREATE INDEX ON evaluations (laboratory_id);
+
+CREATE INDEX ON evaluations (product_id, published_at DESC)
+    WHERE published_at IS NOT NULL AND withdrawn_at IS NULL;
+
+CREATE INDEX ON subscriptions (organisation_id)
+    WHERE status = 'active';
+
+CREATE INDEX ON events (organisation_id, occurred_at DESC);
+
+CREATE INDEX ON audit_log (organisation_id, occurred_at DESC)
+    WHERE outcome = 'denied';
 ```
 
-Equality column first, sort column last. Postgres walks straight to that product's rows and they are already in date order. A standalone index on published_at cannot serve that, because it would scan every product's evaluations and filter.
+The first four are foreign keys, and Postgres does not index those automatically. Each one is joined on a request that runs constantly: resolving the caller's organisation, listing a category, assembling the metrics for one evaluation, attributing a result to the lab that produced it. Those are knowable from the schema before a single request arrives.
 
-One partial index, because entitlement resolution runs on every request and only ever wants the active subscription:
+The composite on evaluations is shaped by the query rather than the table. Nobody asks what was published most recently across the whole corpus, they ask for the latest live evaluation for a given product, so the equality column goes first and the sort column last and Postgres walks straight to that product's rows already in date order. The partial predicate keeps withdrawn and unpublished evaluations out of the index entirely, so it only covers rows anyone will read.
 
-```sql
-CREATE INDEX ON subscriptions (organisation_id) WHERE status = 'active';
-```
+The partial on subscriptions is there because entitlement resolution runs on every request and only ever wants the active subscription. Indexing years of expired rows costs writes and returns nothing. status is three values, so it belongs in the predicate rather than as an indexed column. The denial index on audit_log follows the same logic: failed authorisation attempts are a small fraction of traffic and the interesting fraction to query.
 
-Indexing years of expired rows wastes space and slows writes. status on its own is three values, so it belongs in the predicate rather than as an indexed column.
-
-Everything else waits for EXPLAIN ANALYZE on a query that is actually slow.
+Everything past that waits for evidence. Indexes are not free, since every insert and update has to maintain them, so more indexes means slower writes and more storage. When a query turns out slow I would run EXPLAIN ANALYZE and index what that query actually filters and sorts on. Most tables settle at three to five.
 
 Behavioural events. The gating decision was to show Basic users what Premium unlocks rather than hide it. Hiding is RBAC behaviour and it removes the upgrade path. That creates an obligation to measure whether it works, so the platform needs an event stream: upgrade prompt shown, upgrade prompt clicked, plan changed.
 
 Those events are structured, not unstructured. Every one has an organisation, a user, a timestamp, an event type and a properties object. What makes them different from the tables above is the write pattern: append only, never updated, high volume relative to the corpus, different retention. So they get their own table with a jsonb properties column, kept off the transactional path so an analytical query cannot slow down result publication. The trigger to move them to a dedicated event store is write volume, not the shape of the data.
 
 At roughly forty member organisations this stays a single instance. The trigger to revisit is the corpus outgrowing what one read replica serves comfortably, not a user count.
+
+One thing the current model does not carry is quantity.
+plan_features stores boolean capabilities, so a plan can grant report
+export but cannot express a seat limit or a monthly download cap. If
+Enterprise means a fixed number of seats, plan_features needs a value
+column alongside enabled, and the entitlement resolver starts
+returning limits as well as booleans rather than a plain boolean map.
+That is the first change I would make if packaging turned out to be
+usage based rather than purely feature based.
 
 ### 2. API security
 
@@ -272,31 +329,17 @@ At larger scale I would cache entitlement resolution briefly with explicit inval
 
 ### 3. Vetting AI-generated code
 
-The hard part is not generating code, it is reading it. Most engineers were trained to write, not to read unfamiliar code. Given a diff, people scroll top to bottom like a book and come out with no model of what happens. Code is a graph of what calls what, not a narrative.
+The risk is not that a model writes broken code. It is that it writes plausible code for problems that were solved years ago. Ask an agent to build a full-stack application and it will happily hand you two thousand lines of custom session management, hand-rolled JWT signing and business logic buried in database triggers. It compiles, it passes the tests it wrote for itself, and it is a maintenance liability nobody agreed to take on. The difference between a junior and a senior here is not who reads the output more carefully afterwards, it is who constrains the input before any of it exists. I do not let a model invent infrastructure. I tell it which library to use and give it the current documentation for that library, which is why I run Context7 in my editor: the model works from the real API rather than whatever version it half remembers from training. The same idea is why .cursor/rules/icrt-dashboard.mdc and .cursor/rules/implementation-design.mdc are committed in this repository. They constrain what may be generated, they are dated before the work, and anyone can read them, which is more useful than claiming afterwards that I reviewed things carefully.
 
-Two things I look for specifically.
+With that in place there are two failure modes I still look for specifically. The first is authorisation logic ending up in presentation code. Given a gating requirement, a model puts the check where the UI needs it, so you end up with tier === 'premium' scattered through components, and every one of those is somewhere the rule can drift out of step with the others. None of them is a control anyway, because they all run on the client. In this repository the rule lives in one file: components ask resolveCapabilities for a capability and never for a tier, unknown input resolves to Basic so it fails closed, and because the map is typed Record<Tier, Capabilities> adding a fourth tier is a compile error until every capability is declared. I check it with a grep that fails if a tier string appears outside src/entitlements, and the Playwright spec asserting that no product identifier reaches the DOM on Basic is the executable version of the same claim. Against a real API I would add the server-side twin: a Basic token cannot fetch product fields, and cannot get a report by guessing its ID.
 
-Authorisation written into presentation code. Given a gating requirement, a model puts the check where the UI needs it. You end up with tier === 'premium' scattered through components. Every one is a place the rule can drift, and none of them is a control, because they all run on the client.
+The second is work in the render path. Models write code that is correct and expensive, and this one caught me. The first version of the chart component called getComputedStyle(document.documentElement) inside the bar fill callback and again inside a draw plugin, both of which run per bar, per frame, inside a requestAnimationFrame loop. That is a forced style recalculation roughly a dozen times a frame for values that never change after mount. Nothing about it looks wrong when you read it and it passed every test. It only surfaces when you stop reading the code and ask what actually runs per frame. The tokens are now read once on mount into a frozen object and everything reads from that.
 
-In this repo the rule lives in one file. Components ask resolveCapabilities for a capability, never for a tier. Adding a fourth tier is a compile error until every capability is declared, because the map is typed Record<Tier, Capabilities>. Unknown input resolves to Basic, so it fails closed.
+Reading the diff is its own skill and most of us were never taught it. We were trained to write code, not to read unfamiliar code, so people scroll a diff top to bottom like a book and come out the other end with no model of what happens. Code is a graph of what calls what, not a narrative, so I start at the entry point, the place where it talks to the outside world, and follow the calls outward from there. Then I read the tests, because they state the contract more honestly than any comment: what goes in, what comes back. Then I follow the data rather than the functions, picking the variable that matters and tracing it from where it is created, through wherever it is checked, to where it is returned, because that tells me which checkpoints are actually load bearing. Anything that does not change the request, block the flow or explain a bug, I skip.
 
-How I vet it: a grep that fails if a tier string appears outside src/entitlements, and a committed rules file constraining what the tooling may generate. The Playwright spec asserts no product identifier reaches the DOM on Basic, which is the executable form of the same claim. Against a real API I would add a test proving a Basic token cannot fetch product fields or a report by guessing its ID.
+The step people miss is reading one failure path as an attacker rather than as an author. Take a login handler: does the error message differ when the email exists compared to when it does not, and does the wrong-password branch take measurably longer than the user-not-found branch? Either one lets somebody enumerate accounts, and a model will write both without noticing, because both are locally sensible. Then I compress. If I cannot write down in one line what the code does, I looked at it, I did not read it.
 
-Work in the render path. Models write code that is correct and expensive. The first version of the chart component called getComputedStyle(document.documentElement) inside the bar fill callback and inside a draw plugin. Both run per bar, per frame, inside a requestAnimationFrame loop. That is a forced style recalculation roughly a dozen times a frame, for values that never change after mount.
-
-Nothing about it looks wrong when you read it. It passes tests. It only shows up when you ask what runs per frame. The tokens are now read once on mount into a frozen object and everything reads from that.
-
-How I vet it: for anything inside a render loop or an event handler I trace what runs per frame, then confirm it in the performance profiler rather than trusting the read.
-
-How I read a diff I did not write. Find the entry point, the code that talks to the outside world, and follow calls outward rather than reading files in order. Read the tests first, because they state the contract. Then follow the data rather than the functions: pick the variable that matters and trace where it is created, checked and returned, because that tells you which checkpoints are load bearing. Skip anything that does not change the request, block the flow or explain a bug.
-
-Then read one failure path as an attacker. On a login handler: does the error differ when the email exists versus when it does not, and does the wrong-password branch take measurably longer than the user-not-found branch? Either one lets someone enumerate accounts, and a model will write both without noticing.
-
-Last step is compression. If I cannot write down in one line what the code does, I looked at it, I did not read it.
-
-Automation owns what automation owns. Formatting to Prettier, static hygiene to the linters, type compatibility to the compiler, behaviour to Vitest and Playwright, installability to npm ci in a clean container in CI. This repo surfaced three dependency defects that way, all invisible locally: a peer conflict, a lockfile written by a different npm major than the runtime image, and an invalid hoisted picomatch. Review attention goes on what none of those catch: responsibility placement, dependency direction, invariants, state ownership and what runs per frame.
-
-The constraints are committed in .cursor/rules/, so the checks applied to generated code are reviewable rather than claims made afterwards.
+The last part is knowing what not to spend attention on. Formatting belongs to Prettier, static hygiene to the linters, type compatibility to the compiler, behaviour to Vitest and Playwright, and installability to npm ci in a clean container in CI. That last one earned its place here: this repository surfaced three separate dependency defects that were completely invisible locally, a peer version conflict masked by a stale node_modules, a lockfile written by a different npm major than the runtime image, and an invalid hoisted picomatch that violated the peer range fdir requires inside Vite's tinyglobby. None of that is worth a human's judgement, which is exactly why it is automated. What is left for review is responsibility placement, dependency direction, invariants, who owns which piece of state, and what runs per frame.
 
 ## Notes
 

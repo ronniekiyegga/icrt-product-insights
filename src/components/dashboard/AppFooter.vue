@@ -13,16 +13,16 @@ const footnote = computed(() => `${productCount.value} · Aggregates cover full 
 <template>
   <footer class="w-full bg-background-base">
     <div class="page flex items-center justify-between border-t border-stroke-weak py-4">
-      <p class="text-supertiny text-stroke-strong mobile:hidden">
+      <p class="text-supertiny text-text-weak mobile:hidden">
         © 2026 International Consumer Research & Testing.
       </p>
-      <p class="hidden text-supertiny text-stroke-strong mobile:block">
+      <p class="hidden text-supertiny text-text-weak mobile:block">
         © 2026 ICRT. All rights reserved.
       </p>
-      <p class="text-supertiny text-stroke-strong mobile:hidden">
+      <p class="text-supertiny text-text-weak mobile:hidden">
         {{ footnote }}
       </p>
-      <p class="hidden text-supertiny text-stroke-strong mobile:block">
+      <p class="hidden text-supertiny text-text-weak mobile:block">
         {{ productCount }}
       </p>
     </div>

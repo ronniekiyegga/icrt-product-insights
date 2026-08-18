@@ -15,6 +15,7 @@ import { LayoutGrid } from '@lucide/vue'
       type="button"
       class="cursor-pointer border-b border-transparent px-2 py-1.5 font-normal text-annotation text-text-weak hover:text-text-strong"
       aria-disabled="true"
+      tabindex="-1"
     >
       Audit Logs
     </button>
@@ -22,6 +23,7 @@ import { LayoutGrid } from '@lucide/vue'
       type="button"
       class="cursor-pointer border-b border-transparent px-2 py-1.5 font-normal text-annotation text-text-weak hover:text-text-strong"
       aria-disabled="true"
+      tabindex="-1"
     >
       Announcements
     </button>
