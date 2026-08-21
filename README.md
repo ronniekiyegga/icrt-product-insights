@@ -1,50 +1,182 @@
 # ICRT Product Insights
 
-A Vue 3 dashboard for exploring dishwasher test results at three subscription tiers.
+A responsive Vue dashboard for exploring dishwasher test results across Basic, Premium and Enterprise access levels. It was built for a time-boxed technical assessment that also asked for a proposed backend schema, an API security approach and an explanation of how AI-generated code should be reviewed.
 
-_Basic: aggregate stats only, comparison gated._
-
-![Basic tier showing aggregate stats with the product comparison gated](docs/desktop-basic.png)
-
-_Premium: interactive chart, export unavailable._
-
-![Premium tier showing the interactive chart with export unavailable](docs/desktop-premium.png)
-
-_Enterprise: chart and active PDF export._
+[Repository](https://github.com/ronniekiyegga/icrt-product-insights)
 
 ![Enterprise tier showing the chart with active PDF export](docs/desktop-enterprise.png)
 
-## Table of contents
+## Assessment scope
 
-- [ICRT Product Insights](#icrt-product-insights)
-- [Table of contents](#table-of-contents)
-- [Run locally](#run-locally)
-- [Tech stack](#tech-stack)
-- [Project structure](#project-structure)
-- [Verification](#verification)
-- [Testing](#testing)
-  - [Vitest](#vitest)
-  - [Playwright](#playwright)
-  - [Continuous integration](#continuous-integration)
-- [Part A decisions](#part-a-decisions)
-- [Part B](#part-b)
-  - [1. Database schema](#1-database-schema)
-  - [2. API security](#2-api-security)
-  - [3. Vetting AI-generated code](#3-vetting-ai-generated-code)
-- [Notes](#notes)
+The supplied brief required a single-page Vue dashboard, a tier switcher, subscription-based feature gating and use of the supplied static product payload. The implementation adds a responsive Chart.js comparison, accessible gated states, an Enterprise PDF export, unit and browser tests, CI and a production Docker image.
 
-## Run locally
+The brief explicitly places the static payload in the frontend. Product data therefore exists in the built JavaScript for this exercise. The application demonstrates gating behaviour and prevents Basic product identifiers from reaching the DOM, but it does not claim that client-side code is a security boundary.
 
-Requires Node `^22.22.2` or `>=24.15.0` and npm `11.5.2`. Docker and CI use Node `22.22.2` and npm `11.5.2`.
+## Feature access
+
+| Tier       | Category aggregates | Product comparison         | PDF report              |
+| ---------- | ------------------- | -------------------------- | ----------------------- |
+| Basic      | Available           | Gated with upgrade context | Hidden                  |
+| Premium    | Available           | Available                  | Visible but unavailable |
+| Enterprise | Available           | Available                  | Available               |
+
+<details>
+<summary>Basic: aggregate stats only, comparison gated</summary>
+
+![Basic tier showing aggregate stats with the product comparison gated](docs/desktop-basic.png)
+
+</details>
+
+<details>
+<summary>Premium: interactive chart, export unavailable</summary>
+
+![Premium tier showing the interactive chart with export unavailable](docs/desktop-premium.png)
+
+</details>
+
+## Engineering decisions
+
+### Capability-based entitlements rather than tier checks
+
+**Decision:** Components ask for `viewAggregates`, `viewComparison` and `exportReport` capabilities instead of checking strings such as `tier === 'enterprise'`.
+
+**Why:** Commercial tier names and application behaviour can change independently. The typed `Record<Tier, Capabilities>` requires every known tier to declare every capability, while unknown input falls back to Basic. A future bespoke plan can resolve to the same capability shape without changing each component.
+
+**Trade-off:** This adds a policy layer that is more abstract than the three fixed tiers strictly require.
+
+### Gating controls what is mounted, not only what is visible
+
+**Decision:** Basic renders a blurred skeleton and upgrade prompt rather than rendering product data and hiding it with CSS. The real comparison component is not mounted.
+
+**Why:** Blur and `display: none` do not prevent data from reaching the DOM. The Basic unit and Playwright tests explicitly reject all supplied brand and model identifiers.
+
+**Trade-off:** This improves the frontend boundary but cannot secure a payload shipped to the browser. A real backend must omit product-level fields before serialisation.
+
+### Chart.js owns geometry while Vue owns presentation and accessibility
+
+**Decision:** Chart.js provides the scale, responsive bar geometry and hit testing. Local plugins draw the tracks, layered shadows and in-bar labels. Vue renders the external tooltip, visible scale and screen-reader table.
+
+**Why:** Reimplementing chart layout would duplicate tested geometry, while the extension points allow the required visual treatment. Keeping tooltip content and the accessible table in Vue produces normal DOM that can be styled and announced independently of canvas drawing.
+
+**Trade-off:** Manual event handling and canvas plugins are more code to test than a default Chart.js theme. The screen-reader table must remain in sync with the chart payload.
+
+### Heavy features load only when used
+
+**Decision:** The comparison is loaded with `defineAsyncComponent`, and jsPDF is dynamically imported only when an enabled export runs. The report is generated from the payload rather than by capturing the DOM.
+
+**Why:** Basic users do not need Chart.js, and chart viewers do not need PDF code until export. Data-driven PDF generation is deterministic and independent of viewport layout. The unused jsPDF DOM-rendering dependencies are aliased to an empty module in Vite.
+
+**Trade-off:** Premium and Enterprise have a first-load delay for the chart, and the first export waits for the PDF chunk.
+
+### Metrics are relational rows rather than JSON fields
+
+**Decision:** The proposed schema separates metric definitions from measured values. An evaluation has many `test_metrics`, each linked to a category-specific definition.
+
+**Why:** Product categories can use different criteria without a schema migration, while definitions preserve a shared vocabulary, units, ranges and score weighting. This supports comparison better than an unconstrained JSON object.
+
+**Trade-off:** Cross-product reporting needs joins and sometimes a pivot. A JSON payload would be quicker to store but weaker for integrity and comparison.
+
+## Assumptions and scope
+
+The brief leaves several domain questions open. I made explicit assumptions to complete a coherent design without treating them as requirements:
+
+- **Organisation-level subscriptions:** I modelled the product as B2B, with an organisation holding a subscription and one or more users belonging to it. If subscriptions are per person, the subscription foreign key can point to `user_id` instead.
+- **Bespoke capabilities:** Plans resolve to feature codes rather than an ordered tier rank. This allows an organisation-specific entitlement set, but the brief only requires Basic, Premium and Enterprise.
+- **Shared test corpus:** Products, evaluations and metrics are shared reference data. Accounts, subscriptions and audit records are organisation-scoped. Entitlement changes which fields an API returns, not which corpus rows exist.
+- **Events and releases:** I introduced an event or release idea as a possible way to group batches of published testing results. The brief does not state that such batches exist. The ERD also uses events for observability, so production discovery should decide whether publication releases and behavioural events are separate concepts and name or remove them accordingly.
+
+In a production discovery process, I would validate these assumptions with product and domain stakeholders before extending the model further. I would not introduce separate services, event-driven architecture, additional storage systems, caching layers or more domain entities until requirements or measured scale justify them.
+
+## Architecture
+
+The frontend dependency direction is:
+
+```text
+main.ts / App.vue -> DashboardView -> dashboard components -> shared UI and icons
+                                  -> entitlements, data and reports
+```
+
+`data` and `entitlements` do not import components. `DashboardView` owns page state and orchestration, the entitlement module owns access policy, and components render the resolved outcome.
+
+The backend below is a proposal, not an implemented service.
+
+![Entity relationship diagram for the ICRT schema](docs/erd.png)
+
+Blue represents accounts and entitlements, green the shared test corpus, and purple observability.
+
+The proposed PostgreSQL model has three groups:
+
+- **Accounts and entitlements:** `organisations`, `users`, `plans`, `plan_features` and `subscriptions`.
+- **Test corpus:** `categories`, `products`, `laboratories`, `evaluations`, `metric_definitions`, `test_metrics` and `reports`.
+- **Observability:** `events` and `audit_log`.
+
+Primary and foreign keys enforce ownership of products, evaluations, measurements and subscriptions. `plan_features` and `test_metrics` use composite primary keys. Natural identifiers such as user email, plan code, report download ID and category metric code are unique. Evaluations can be withdrawn or supersede an earlier result rather than rewriting published history.
+
+Indexes follow known request paths: organisation lookup for users and active subscriptions, category lookup for products, evaluation lookup for metrics and laboratory attribution. A partial `(product_id, published_at DESC)` index covers only published, non-withdrawn evaluations. Organisation and time indexes support event queries, with a partial audit index for denied outcomes. Further indexes should be driven by `EXPLAIN ANALYZE`, because every index adds write and storage cost.
+
+## Security
+
+Frontend gating is user experience only. In the proposed backend, every protected request would:
+
+1. authenticate the token;
+2. resolve the current user, organisation and subscription capabilities;
+3. apply organisation and resource scope;
+4. query and serialise only the fields the capability permits.
+
+The category endpoint can always return aggregates but only include `products[]` when `view_product_results` is present. The enforcement point is the API response boundary, so the chart, tooltip, table and report all receive the same safe shape rather than implementing separate security checks.
+
+Report download would accept an opaque `download_id`, repeat the organisation and capability checks, and return a short-lived signed URL. Guessing an ID grants nothing. Downloads and denials would be audited, and the report endpoint would be rate limited because it is expensive and attractive to scrape.
+
+Feature entitlement and RBAC are separate checks. Paying for product results does not allow a user to access another organisation's private resources. Capabilities should be resolved from server-side subscription data rather than trusted from a client claim.
+
+## Vetting AI-generated code
+
+I focus review on two failure modes that can look plausible and still pass model-generated tests.
+
+1. **Authorisation in presentation code.** A model may scatter tier checks through components, creating inconsistent gates that remain bypassable. I constrain the design to one capability resolver, search for tier checks outside it and test unknown input as Basic. For a real API, I would also verify that Basic responses and the rendered DOM contain no protected fields.
+2. **Hidden work in hot paths.** A model may place correct but expensive work inside render or animation callbacks. An earlier chart version repeatedly called `getComputedStyle` per bar and draw. Tracing what runs per frame exposed it, and the chart now reads its tokens once on mount. I review call paths, use current library documentation, profile runtime behaviour and leave formatting, types, lint rules and installability to automated checks.
+
+AI output is treated as an untrusted draft. The useful review questions are where responsibility sits, what data crosses a boundary, what runs repeatedly, and whether the tests were written independently of the implementation's assumptions.
+
+## Testing and quality
+
+| Layer                     | What it verifies                                                                                                                                      |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vitest and Vue Test Utils | Capability resolution, fail-closed input, Basic DOM exclusion, gate behaviour, export refusal and emission, tier-menu interaction and keyboard focus. |
+| Playwright in Chromium    | Basic product identifiers remain absent, Premium export stays focusable but produces no download, and Enterprise downloads the expected PDF.          |
+| Static checks             | Prettier, Oxlint, ESLint and `vue-tsc` run against the repository.                                                                                    |
+| CI `verify` job           | Clean install, format, lint, types, unit tests, production build and Docker build.                                                                    |
+| CI `e2e` job              | Runs after `verify`, installs Chromium, executes the three tier journeys and uploads the report on failure.                                           |
+
+The Basic browser test is the highest-value frontend contract. It verifies the assembled page does not merely obscure protected identifiers.
+
+Run all local checks with:
+
+```sh
+npm run format:check
+npm run lint:check
+npm run type-check
+npm run test:unit
+npm run test:e2e
+npm run build
+```
+
+Install Chromium once with `npx playwright install chromium`.
+
+## Running locally
+
+Requires Node `^22.22.2` or `>=24.15.0` and npm `11.5.2`.
 
 ```sh
 npm ci
 npm run dev
 ```
 
-Open `http://localhost:3000`. Use the profile menu to switch between Basic, Premium and Enterprise.
+Open `http://localhost:3000` and use the profile menu to switch tiers.
 
-Run the production image with Docker:
+## Deployment
+
+The multi-stage Dockerfile builds with Node `22.22.2-alpine` and serves only the generated `dist` files from nginx:
 
 ```sh
 docker build -t icrt-product-insights .
@@ -53,303 +185,12 @@ docker run --rm -p 8080:80 icrt-product-insights
 
 Open `http://localhost:8080`.
 
-## Tech stack
-
-| Tool           | Declared version                                                             | Why it is included                                                                          |
-| -------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Vue            | `^3.5.40`                                                                    | Builds the dashboard from focused components and reactive entitlement state.                |
-| TypeScript     | `~6.0.0`                                                                     | Checks component props, entitlement values and report data at build time.                   |
-| Vite           | `^8.1.5`                                                                     | Runs the local server and produces the production bundle.                                   |
-| Tailwind CSS   | `^4.3.3`                                                                     | Applies the responsive layout and design tokens without a separate component styling layer. |
-| Chart.js       | `^4.5.1`                                                                     | Owns the score scale, responsive layout, bar geometry and hit testing.                      |
-| jsPDF          | `^4.2.1`                                                                     | Generates the Enterprise PDF report directly from the data payload.                         |
-| Vitest         | `^4.1.10`                                                                    | Runs component and entitlement tests in jsdom.                                              |
-| Vue Test Utils | `^2.4.11`                                                                    | Mounts Vue components for interaction and rendering assertions.                             |
-| Playwright     | `^1.61.1`                                                                    | Exercises the Basic, Premium and Enterprise journeys in Chromium.                           |
-| ESLint         | `^10.7.0`                                                                    | Checks Vue and TypeScript rules that require type-aware or framework-aware analysis.        |
-| Oxlint         | `^1.73.0`                                                                    | Runs the fast first lint pass across the repository.                                        |
-| Prettier       | `3.9.5`                                                                      | Enforces one formatting result locally and in CI.                                           |
-| Docker         | Node `22.22.2-alpine` build, `nginx:alpine` runtime                          | Builds in a clean Node environment and serves only the generated static files.              |
-| GitHub Actions | `actions/checkout@v4`, `actions/setup-node@v4`, `actions/upload-artifact@v4` | Runs verification and Chromium end-to-end jobs on pushes and pull requests.                 |
-
-## Project structure
-
-```text
-src/                              Application source.
-├── assets/                       Global Tailwind theme, design tokens and shared CSS.
-├── components/                   Vue components grouped by responsibility.
-│   ├── dashboard/                Dashboard sections, chart presentation and tier controls.
-│   │   └── __tests__/            Dashboard component specifications.
-│   ├── icons/                    Local SVG icon components and shared gradient definitions.
-│   └── ui/                       Reusable interface primitives.
-│       └── __tests__/            UI primitive specifications.
-├── data/                         Typed static testing payload supplied by the brief.
-├── entitlements/                 Tier types and the central capability resolver.
-│   └── __tests__/                Capability matrix specifications.
-├── reports/                      PDF generation and intentionally empty optional-module aliases.
-└── views/                        Page-level composition.
-    └── __tests__/                Dashboard view specifications.
-```
-
-Components may depend on `entitlements` and `data`. Neither `entitlements` nor `data` may depend on components.
-
-## Verification
-
-Install Chromium once before running the Playwright script: `npx playwright install chromium`.
-
-| Script                    | What it does                                                       |
-| ------------------------- | ------------------------------------------------------------------ |
-| `npm run dev`             | Starts the Vite development server.                                |
-| `npm run build`           | Runs type checking and the production Vite build in parallel.      |
-| `npm run preview`         | Serves the production build with Vite preview.                     |
-| `npm run test:unit`       | Runs all Vitest specifications once.                               |
-| `npm run test:unit:watch` | Runs Vitest in watch mode.                                         |
-| `npm run test:e2e`        | Runs the Playwright end-to-end suite.                              |
-| `npm run build-only`      | Builds the production bundle without running type checking.        |
-| `npm run type-check`      | Runs the Vue TypeScript project build.                             |
-| `npm run lint`            | Runs the fixing Oxlint and ESLint tasks in sequence.               |
-| `npm run lint:check`      | Checks the repository with Oxlint and ESLint without fixing files. |
-| `npm run lint:oxlint`     | Runs Oxlint and applies fixes.                                     |
-| `npm run lint:eslint`     | Runs ESLint with fixes and its cache enabled.                      |
-| `npm run format`          | Formats supported files with Prettier.                             |
-| `npm run format:check`    | Checks Prettier formatting without changing files.                 |
-
-## Testing
-
-### Vitest
-
-- `capabilities.spec.ts` checks the Basic, Premium and Enterprise capability matrices and confirms unknown inputs fall back to Basic.
-- `DashboardView.spec.ts` confirms the Basic view does not mount the comparison, no product identifier reaches the DOM, the export control is hidden and disabled, and the upgrade action moves the simulation to Premium.
-- `ReportExportButton.spec.ts` checks the unavailable button's visual and accessible state, refusal of click and keyboard actions, the enabled export event, and removal from layout when hidden.
-- `TierSwitcher.spec.ts` checks tier selection, hover opening, arrow-key focus movement, Escape closing and focus return.
-- `AccessGate.spec.ts` checks the gate copy, action label and emitted upgrade action.
-
-### Playwright
-
-- Basic asserts that `BrandA`, `BrandB`, `BrandC`, `DW-100`, `DW-200` and `DW-300` do not reach the DOM while the comparison is gated.
-- Premium asserts that the export button remains visible and keyboard focusable, exposes its gate explanation, and produces no download when activated with Enter.
-- Enterprise asserts that clicking export produces a download named `dishwashers-product-report.pdf`.
-
-### Continuous integration
-
-- `verify` installs the pinned npm version and clean dependencies, then runs formatting, linting, type checking, unit tests, the production build and the Docker build.
-- `e2e` runs after `verify`, installs Chromium and its system dependencies, runs the Chromium Playwright project, and uploads the Playwright report when the job fails.
-
-## Part A decisions
-
-- The supplied aggregates cover 15 products, while the payload contains three product records. The dashboard shows "3 of 15" and does not recalculate the aggregates from a different set.
-- The comparison uses horizontal bars. They use the wide layout well, keep product labels readable, and can extend downwards as more products are added. A bullet chart was considered, but it asks readers to learn a less familiar visual grammar.
-- Time to result is shown in the tooltip and accessible table, not as a second chart series. Score and time measure different things, and three records cannot support an implied correlation.
-- Chart.js owns the scale, responsive layout, bar geometry and hit testing. Custom plugins draw the branded tracks and in-bar labels, while the external Vue tooltip keeps the presentation consistent with the rest of the interface.
-- A custom plugin draws the category average at 82.4 as a vertical reference line, so the question the chart answers is which of these products beats the category rather than only how they rank against each other. It was written as a plugin rather than installing chartjs-plugin-annotation, since the component already had a plugin pipeline and a dependency for one dashed line was not justified.
-- Basic sees a blurred skeleton, not blurred product data. CSS blur is not an access control and no product identifier reaches the DOM.
-- Premium can focus the unavailable export button and read why it is unavailable. `aria-disabled` is advisory, so the click and keyboard handlers also refuse the action.
-- The chart is loaded only after the comparison capability is granted. PDF code is loaded only when an Enterprise user exports. The main path does not pay for either dependency up front.
-- There is no router, store, shared button abstraction or composable with one consumer. Those mechanisms do not solve a current problem in this single-page application.
-
-The tier control is a demonstration harness. In production, entitlements would come from the authenticated session and current subscription, not from a user-controlled menu. The brief explicitly requires the static payload to be parsed in the frontend, so product values exist in the built JavaScript for this exercise. Part A therefore demonstrates gating UX, not secure data access. A production Basic API response would omit product-level fields at the server boundary.
-
-## Part B
-
-### 1. Database schema
-
-![Entity relationship diagram for the ICRT schema](docs/erd.png)
-
-Blue: accounts and entitlements. Green: the shared test corpus.
-Purple: observability. Entitlement decides which fields the API
-returns, not which rows exist, which is why no corpus table carries
-`organisation_id`.
-
-The diagram shows relationships. Constraints, defaults and indexes
-are below, since they carry the decisions the shape does not: which
-deletes cascade, which results are superseded rather than removed,
-and which reads the indexes actually serve.
-
-One PostgreSQL database.
-
-The data is relational and it has to stay consistent. An evaluation belongs to a product, a product to a category, an entitlement to a subscription. "Which products has this organisation paid to see" is a join. Deleting a product has to remove its evaluations, metrics and reports in the same transaction, or the corpus is left half deleted. ICRT's whole product is that its published results are citable, so two members reading different versions of the same evaluation is worse than a slow query.
-
-```text
-organisations       id PK, name, country, created_at
-users               id PK, organisation_id FK, email UNIQUE, role
-plans               id PK, code UNIQUE, name
-plan_features       (plan_id FK, feature_code) composite PK, enabled,
-                    limit_value
-subscriptions       id PK, organisation_id FK, plan_id FK, status,
-                    starts_at, ends_at
-
-categories          id PK, name UNIQUE
-products            id PK, category_id FK, brand, model
-                    UNIQUE (category_id, brand, model)
-laboratories        id PK, name, accreditation_code UNIQUE
-evaluations         id PK, product_id FK, laboratory_id FK,
-                    protocol_version, sample_received_at,
-                    published_at, withdrawn_at,
-                    supersedes_evaluation_id FK, composite_score
-metric_definitions  id PK, category_id FK, code, label, unit,
-                    scale_min, scale_max, weight,
-                    contributes_to_score
-                    UNIQUE (category_id, code)
-test_metrics        (evaluation_id FK, metric_definition_id FK)
-                    composite PK, value numeric
-reports             id PK, evaluation_id FK, download_id UNIQUE,
-                    storage_key UNIQUE, created_at
-events              id PK, organisation_id FK, user_id FK,
-                    occurred_at, event_type, properties jsonb
-audit_log           id PK, occurred_at, organisation_id FK,
-                    user_id FK, action, outcome, subject_type,
-                    subject_id, request_ip, detail jsonb
-```
-
-Plans resolve to a set of feature codes rather than an ordered rank.
-Nothing in the schema assumes tiers are sequential, so an account can
-move directly from Basic to Enterprise, and ICRT can create a plan
-whose capabilities do not sit neatly above or below an existing one.
-If an upgrade path ever needed enforcing, that belongs in the billing
-flow rather than the data model, so pricing changes do not require a
-migration.
-
-The brief specifies users and subscription tiers but not who holds
-the subscription. I have assumed a tier is bought by an organisation
-and used by several of its people, since Enterprise implies seats and
-ICRT's own subscribers are member consumer bodies rather than
-individuals. A Basic account is simply an organisation with one
-person in it, so upgrading changes which plan the subscription points
-at rather than creating anything new. If a tier is per person
-instead, organisations is removed and subscriptions.organisation_id
-becomes user_id, and nothing else in the schema changes.
-
-Worth being explicit about what is and is not shared. The test corpus
-is not tenant isolated: every subscriber reads the same products,
-evaluations and metrics, and what varies is which fields the API
-returns. Accounts are isolated: users, subscriptions and events all
-scope to an organisation. That is why there is no organisation_id on
-products or evaluations.
-
-Metrics are rows, not columns. A published score is a composite, not a measurement. It is made of weighted sub-measurements, and comparative testing also captures attributes that are useful to the reader but deliberately do not feed the overall score. That is what weight and contributes_to_score are for. Storing criteria as rows means dishwashers and cameras carry different test criteria without a migration per category.
-
-It costs something. You lose column-level type constraints, and comparing two criteria across products needs a pivot. The alternative is a jsonb blob on evaluations, quicker to write but giving up referential integrity over which criteria exist. I went with rows because ICRT's value is comparability across members and markets, and comparability needs a fixed vocabulary of criteria. Qualitative ratings are stored as documented ordinals rather than free text.
-
-ttr_days is derived, not stored. It is published_at - sample_received_at. Storing it invites drift the first time someone corrects a publication date and forgets the derived column. The category aggregates are a materialised rollup refreshed on publication, not computed per request.
-
-Entitlements are data. plan_features means changing what a tier includes is a row update, not a deploy. It is the same shape as the frontend capability map: a plan resolves to a set of feature codes. Effective entitlements are the sum of the active plan, any inherited base plan, add-ons and trials, most generous wins.
-
-Indexes. The columns I would index are users.organisation_id, products.category_id, test_metrics.evaluation_id, evaluations.laboratory_id, a composite on evaluations (product_id, published_at DESC), and a partial on subscriptions (organisation_id) where the status is active, plus two on the observability tables.
-
-```sql
-CREATE INDEX ON users (organisation_id);
-CREATE INDEX ON products (category_id);
-CREATE INDEX ON test_metrics (evaluation_id);
-CREATE INDEX ON evaluations (laboratory_id);
-
-CREATE INDEX ON evaluations (product_id, published_at DESC)
-    WHERE published_at IS NOT NULL AND withdrawn_at IS NULL;
-
-CREATE INDEX ON subscriptions (organisation_id)
-    WHERE status = 'active';
-
-CREATE INDEX ON events (organisation_id, occurred_at DESC);
-
-CREATE INDEX ON audit_log (organisation_id, occurred_at DESC)
-    WHERE outcome = 'denied';
-```
-
-The first four are foreign keys, and Postgres does not index those automatically. Each one is joined on a request that runs constantly: resolving the caller's organisation, listing a category, assembling the metrics for one evaluation, attributing a result to the lab that produced it. Those are knowable from the schema before a single request arrives.
-
-The composite on evaluations is shaped by the query rather than the table. Nobody asks what was published most recently across the whole corpus, they ask for the latest live evaluation for a given product, so the equality column goes first and the sort column last and Postgres walks straight to that product's rows already in date order. The partial predicate keeps withdrawn and unpublished evaluations out of the index entirely, so it only covers rows anyone will read.
-
-The partial on subscriptions is there because entitlement resolution runs on every request and only ever wants the active subscription. Indexing years of expired rows costs writes and returns nothing. status is three values, so it belongs in the predicate rather than as an indexed column. The denial index on audit_log follows the same logic: failed authorisation attempts are a small fraction of traffic and the interesting fraction to query.
-
-Everything past that waits for evidence. Indexes are not free, since every insert and update has to maintain them, so more indexes means slower writes and more storage. When a query turns out slow I would run EXPLAIN ANALYZE and index what that query actually filters and sorts on. Most tables settle at three to five.
-
-Behavioural events. The gating decision was to show Basic users what Premium unlocks rather than hide it. Hiding is RBAC behaviour and it removes the upgrade path. That creates an obligation to measure whether it works, so the platform needs an event stream: upgrade prompt shown, upgrade prompt clicked, plan changed.
-
-Those events are structured, not unstructured. Every one has an organisation, a user, a timestamp, an event type and a properties object. What makes them different from the tables above is the write pattern: append only, never updated, high volume relative to the corpus, different retention. So they get their own table with a jsonb properties column, kept off the transactional path so an analytical query cannot slow down result publication. The trigger to move them to a dedicated event store is write volume, not the shape of the data.
-
-At roughly forty member organisations this stays a single instance. The trigger to revisit is the corpus outgrowing what one read replica serves comfortably, not a user count.
-
-One thing the current model does not carry is quantity.
-plan_features stores boolean capabilities, so a plan can grant report
-export but cannot express a seat limit or a monthly download cap. If
-Enterprise means a fixed number of seats, plan_features needs a value
-column alongside enabled, and the entitlement resolver starts
-returning limits as well as booleans rather than a plain boolean map.
-That is the first change I would make if packaging turned out to be
-usage based rather than purely feature based.
-
-### 2. API security
-
-The frontend gate is user experience. It is not security, and it was never meant to be. Anything running on the client can be edited by the client.
-
-Authentication answers who you are. Authorisation answers what you may do. Both run on every request: the token proves identity, the current subscription resolves entitlement, and the organisation scope decides which rows are visible.
-
-The backend authenticates the token, resolves the user's organisation and current entitlements, checks the capability, and only then queries or serialises product fields. When the capability is absent it returns 403 with `{ allowed: false, reason: 'insufficient_tier', requiredPlan: 'premium' }`, so the client can render a specific prompt rather than a generic one.
-
-**The gate is not the chart, the tooltip, the table or the PDF. The gate is whether the API returns product-level fields. Everything downstream follows automatically, because a component cannot render data it never received. That is one enforcement point instead of four.**
-
-That framing matters because the alternative is a check at every surface, and every one of those is a place the rule can drift.
-
-The endpoints:
-
-```
-GET /api/v1/categories/dishwashers
-    200  aggregate_stats always
-         products[] only when view_product_results is held
-
-GET /api/v1/reports/eval_889
-    302  short-lived signed URL
-    403  otherwise
-```
-
-One URL returns different shapes by entitlement rather than there being a separate privileged route. There is no `/premium/` path to discover, and one endpoint means one check.
-
-Report download works the same way. The client holds an opaque `download_id`, not a storage path. The endpoint repeats the organisation and capability check and returns a short-lived signed URL. An ID on its own grants nothing, so guessing `eval_892` returns 403 rather than a file. Denials and downloads are both audited, and the report endpoint is rate limited per organisation because it is the expensive one and the one worth scraping.
-
-**Where the checks live.** Permissions sit at four layers and only one of them is a control.
-
-The frontend layer is UX. It hides what a user cannot act on so they are not surprised. It is trivially bypassable and nothing depends on it.
-
-The transport layer is the control. Every endpoint resolves entitlements at the top of the handler, before any query runs. A missing check here is the vulnerability, which is why it is one function rather than a pattern copied per route.
-
-The data access layer is defence in depth. Field-level rules mean `composite_score` and `test_metrics` are only serialisable when the caller holds `view_product_results`. If someone adds an endpoint and forgets the transport check, the fields still do not serialise.
-
-The database layer enforces integrity rather than permissions: uniqueness, foreign keys, the constraint that a test metric belongs to exactly one evaluation. Users never touch it directly, but it is what stops an application bug corrupting the corpus.
-
-To prove the transport check has not been forgotten on a new route, a test hits every endpoint with a Basic token and asserts no product field appears in any response body. That is the server-side twin of the Playwright spec asserting no product identifier reaches the DOM.
-
-**403 rather than 404.** 404 hides that the resource exists and is right when the existence itself is confidential. 403 with a reason is right here, because ICRT wants Basic users to know product-level data exists and can be unlocked. It is the same gate-versus-hide decision as the UI, applied to status codes.
-
-**What happens when someone had the feature and now does not.** Capabilities are resolved per request from the current subscription rather than cached in the session, so a downgrade takes effect on the next call. The client handles a 403 mid-session by degrading into the same locked state it would have shown proactively. That is why the gate component is driven by capability rather than by tier: the reactive path and the proactive path render the same thing.
-
-The tier is never a claim the client carries. A stolen token cannot be edited to say Enterprise, because the entitlement is resolved server-side from the subscription on every request.
-
-Two checks, not one. Feature gating answers whether the customer paid for a capability. RBAC and organisation scoping answer whether this user may see this particular resource. A Premium user from one member organisation still cannot read another organisation's unpublished evaluations. Both apply on every request.
-
-At larger scale I would cache entitlement resolution briefly with explicit invalidation on subscription change, but the API response boundary stays the enforcement point.
-
-### 3. Vetting AI-generated code
-
-The risk is not that a model writes broken code. It is that it writes plausible code for problems that were solved years ago. Ask an agent to build a full-stack application and it will happily hand you two thousand lines of custom session management, hand-rolled JWT signing and business logic buried in database triggers. It compiles, it passes the tests it wrote for itself, and it is a maintenance liability nobody agreed to take on. The difference between a junior and a senior here is not who reads the output more carefully afterwards, it is who constrains the input before any of it exists. I do not let a model invent infrastructure. I tell it which library to use and give it the current documentation for that library, which is why I run Context7 in my editor: the model works from the real API rather than whatever version it half remembers from training. The same idea is why .cursor/rules/icrt-dashboard.mdc and .cursor/rules/implementation-design.mdc are committed in this repository. They constrain what may be generated, they are dated before the work, and anyone can read them, which is more useful than claiming afterwards that I reviewed things carefully.
-
-With that in place there are two failure modes I still look for specifically. The first is authorisation logic ending up in presentation code. Given a gating requirement, a model puts the check where the UI needs it, so you end up with tier === 'premium' scattered through components, and every one of those is somewhere the rule can drift out of step with the others. None of them is a control anyway, because they all run on the client. In this repository the rule lives in one file: components ask resolveCapabilities for a capability and never for a tier, unknown input resolves to Basic so it fails closed, and because the map is typed Record<Tier, Capabilities> adding a fourth tier is a compile error until every capability is declared. I check it with a grep that fails if a tier string appears outside src/entitlements, and the Playwright spec asserting that no product identifier reaches the DOM on Basic is the executable version of the same claim. Against a real API I would add the server-side twin: a Basic token cannot fetch product fields, and cannot get a report by guessing its ID.
-
-The second is work in the render path. Models write code that is correct and expensive, and this one caught me. The first version of the chart component called getComputedStyle(document.documentElement) inside the bar fill callback and again inside a draw plugin, both of which run per bar, per frame, inside a requestAnimationFrame loop. That is a forced style recalculation roughly a dozen times a frame for values that never change after mount. Nothing about it looks wrong when you read it and it passed every test. It only surfaces when you stop reading the code and ask what actually runs per frame. The tokens are now read once on mount into a frozen object and everything reads from that.
-
-Reading the diff is its own skill and most of us were never taught it. We were trained to write code, not to read unfamiliar code, so people scroll a diff top to bottom like a book and come out the other end with no model of what happens. Code is a graph of what calls what, not a narrative, so I start at the entry point, the place where it talks to the outside world, and follow the calls outward from there. Then I read the tests, because they state the contract more honestly than any comment: what goes in, what comes back. Then I follow the data rather than the functions, picking the variable that matters and tracing it from where it is created, through wherever it is checked, to where it is returned, because that tells me which checkpoints are actually load bearing. Anything that does not change the request, block the flow or explain a bug, I skip.
-
-The step people miss is reading one failure path as an attacker rather than as an author. Take a login handler: does the error message differ when the email exists compared to when it does not, and does the wrong-password branch take measurably longer than the user-not-found branch? Either one lets somebody enumerate accounts, and a model will write both without noticing, because both are locally sensible. Then I compress. If I cannot write down in one line what the code does, I looked at it, I did not read it.
-
-The last part is knowing what not to spend attention on. Formatting belongs to Prettier, static hygiene to the linters, type compatibility to the compiler, behaviour to Vitest and Playwright, and installability to npm ci in a clean container in CI. That last one earned its place here: this repository surfaced three separate dependency defects that were completely invisible locally, a peer version conflict masked by a stale node_modules, a lockfile written by a different npm major than the runtime image, and an invalid hoisted picomatch that violated the peer range fdir requires inside Vite's tinyglobby. None of that is worth a human's judgement, which is exactly why it is automated. What is left for review is responsibility placement, dependency direction, invariants, who owns which piece of state, and what runs per frame.
-
-## Notes
-
-picomatch is pinned to v4 via overrides. npm hoisted v2 to the root
-for micromatch, which violated the ^3 || ^4 peer range that fdir
-requires inside Vite's tinyglobby. The tree ran fine locally but
-npm ci correctly refused it.
-
-html2canvas, dompurify and canvg are aliased to an empty module in
-vite.config.ts. jsPDF pulls them in for its .html() rendering path,
-which this report does not use. Removing them cut 378 KB of async
-chunks. The PDF is generated from the payload directly rather than
-from DOM capture, so the aliased modules are never reached.
+The Docker build in CI proves the repository can produce the runtime image in a clean environment. There is no live deployment target configured in this repository.
+
+## Further work
+
+1. Validate organisation ownership, bespoke plans and release grouping with stakeholders, then simplify or extend the schema from evidence.
+2. Implement the backend response boundary, organisation scoping and signed report URLs before treating the data gate as secure.
+3. Add server contract tests proving a Basic token cannot retrieve product fields or reports by guessed ID.
+4. Add ingestion, publication and withdrawal workflows when the source and lifecycle of real testing data are known.
+5. Add entitlement quantities such as seat or download limits only if packaging becomes usage-based.
